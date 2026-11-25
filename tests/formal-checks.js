@@ -11,7 +11,7 @@ export function runFormalChecks(breedId=getAllBreeds()[0].id){
  const memory=()=>{const m=new Map();return{getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)};};
  const ok=r=>{if(!r.success)throw Error(r.message);return r;};
  const setup=(s=fresh())=>{let at=T;const disk=memory(),store=createSaveStore(disk);store.save(s);const v=createFormalBreeding({state:s,persist:d=>store.save(d),now:()=>at});return{s,v,disk,store,advance:ms=>at+=ms};};
- test('真实旧版对象存档迁移且保留其他字段',()=>{const s=fresh();s.version='0.3.0';s.inventory.x=5;const r=migrateSave(s);return r.version==='1.0.2'&&r.money===1234&&r.inventory.x===5&&r.activeAnimals.DOG00001.breeding.count===0&&s.version==='0.3.0';});
+ test('真实旧版对象存档迁移且保留其他字段',()=>{const s=fresh();s.version='0.3.0';s.inventory.x=5;const r=migrateSave(s);return r.version==='1.0.3'&&r.money===1234&&r.inventory.x===5&&r.activeAnimals.DOG00001.breeding.count===0&&s.version==='0.3.0';});
  test('旧任务格式异常不覆盖',()=>{const s=fresh();s.version='0.3.0';s.incubationTasks=[{id:'legacy'}];try{migrateSave(s);}catch{return s.incubationTasks[0].id==='legacy';}return false;});
  test('48小时离线成长封顶',()=>{const s=fresh('puppy');settleGrowth(s,T+72*H);return Object.values(s.activeAnimals).every(a=>a.exp===720&&a.stage==='adult');});
  test('再成长24小时达到成年',()=>{const s=fresh('puppy');settleGrowth(s,T+48*H);settleGrowth(s,T+72*H);return Object.values(s.activeAnimals).every(a=>a.exp===720&&a.stage==='adult');});

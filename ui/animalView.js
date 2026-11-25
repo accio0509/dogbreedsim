@@ -378,7 +378,7 @@ export function renderAnimalDetail(animal, {readOnly=false,previewLocation="市�
 
                     <input type="text"
                            id="animal-name-input"
-                           ${animal.birthNamingUsed ? "disabled" : ""}
+                           ${animal.source === "rental" ? "disabled" : ""}
                            maxlength="20"
                            value="${escapeHTML(animal.name)}"
                            placeholder="输入犬只名称"
@@ -387,10 +387,10 @@ export function renderAnimalDetail(animal, {readOnly=false,previewLocation="市�
 
                     <button type="button"
                             class="secondary-button"
-                            ${animal.birthNamingUsed ? "disabled" : ""}
+                            ${animal.source === "rental" ? "disabled" : ""}
                             data-action="rename-animal"
                             data-id="${animal.id}">
-                        ${animal.birthNamingUsed ? "出生已命名" : "保存名称"}
+                        ${animal.source === "rental" ? "租借犬不可改名" : "保存名称"}
                     </button>
 
                 </div>

@@ -36,7 +36,7 @@ export function runExplorationChecks(){
     test('随机未遇见幼犬仍正常结算',()=>{const {s,svc,time}=setup({rng:()=>0.999});svc.start('park','A');time.now+=4*H;return s.explorationTasks[0].reward.puppy===null&&svc.claim('park').success&&s.money===1040;});
     test('任务和奖励随存档持久化',()=>{const {s,svc}=setup();svc.start('park','A');const d=migrateSave(s);return same(d.explorationTasks,s.explorationTasks)&&d.activeAnimals.A.activity==='exploration';});
     test('损坏或重复探索任务拒绝迁移',()=>{const {s,svc}=setup();svc.start('park','A');s.explorationTasks.push(structuredClone(s.explorationTasks[0]));try{migrateSave(s);}catch{return true;}return false;});
-    test('旧0.5.0存档无损迁移',()=>{const {s}=setup();s.version='0.5.0';delete s.explorationTasks;const d=migrateSave(s);return d.version==='1.0.2'&&!d.explorationTasks.length&&same(s.activeAnimals,d.activeAnimals);});
+    test('旧0.5.0存档无损迁移',()=>{const {s}=setup();s.version='0.5.0';delete s.explorationTasks;const d=migrateSave(s);return d.version==='1.0.3'&&!d.explorationTasks.length&&same(s.activeAnimals,d.activeAnimals);});
     test('开始探索写盘失败完整回滚',()=>{const {s,svc}=setup({persist:()=>false});const before=structuredClone(s);return !svc.start('park','A').success&&same(s,before);});
     test('领取奖励写盘失败完整回滚',()=>{const {s,svc,time}=setup();svc.start('park','A');time.now+=4*H;const bad=createExplorationService({state:s,persist:()=>false,now:()=>time.now});const before=structuredClone(s);return !bad.claim('park',{adopt:true}).success&&same(s,before);});
     test('快进12小时同步探索且不可重复结算',()=>{const {s,svc,time}=setup();svc.start('wetland','A');applyDevAction(s,'advance',{hours:12,now:time.now});const exp=s.activeAnimals.A.exp;settleGrowth(s,time.now);return exp===576&&s.activeAnimals.A.exp===exp&&svc.claim('wetland').success;});

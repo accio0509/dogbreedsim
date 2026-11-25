@@ -124,7 +124,7 @@ function renderBreedingPage(page,preselected) {
         room.sync=()=>{animals.splice(0,animals.length,...getAnimals());if(eggs!==gameState.incubationTasks)eggs.splice(0,eggs.length,...gameState.incubationTasks);if(records!==gameState.pedigreeRecords){for(const k of Object.keys(records))delete records[k];Object.assign(records,gameState.pedigreeRecords);}};
     } else {
         const eggs=gameState.incubationTasks;
-        room=mountIncubationRoom(root,{eggs,now:()=>gameNow(gameState),onClaim:(id,name)=>{
+        room=mountIncubationRoom(root,{eggs,getPedigreeRecords:()=>gameState.pedigreeRecords,now:()=>gameNow(gameState),onClaim:(id,name)=>{
             const r=breeding.claim(id,name);showNotice(r.message,!r.success);if(r.success){syncRoom();updateHeader();}return r;
         }});
         room.sync=()=>{if(eggs!==gameState.incubationTasks)eggs.splice(0,eggs.length,...gameState.incubationTasks);};
@@ -220,7 +220,7 @@ function renderNewGame() {
                 </div>
                 <div id="starter-naming" hidden>
                     <h3 id="starter-chosen"></h3>
-                    <p class="muted">已随机生成名字，可以修改或重新随机。确认后不可改名。</p>
+                    <p class="muted">已随机生成名字，可以修改或重新随机。确认后仍可在犬只详情中免费改名。</p>
                     <div class="starter-name-grid">
                         <label>母犬 ♀<input id="starter-female" name="femaleName" maxlength="20" disabled></label>
                         <label>公犬 ♂<input id="starter-male" name="maleName" maxlength="20" disabled></label>
@@ -643,7 +643,7 @@ function saveAnimalName(id) {
     }
 
     // 检查名称长度
-    if (name.length > 20) {
+    if ([...name].length > 20) {
         showRenameMessage(
             "犬只名称不能超过20个字符。",
             false
@@ -884,7 +884,7 @@ function initGame() {
         mainContent.textContent='存档读取失败：'+e.message+'。原存档未覆盖。';const download=document.createElement('button');download.textContent='导出原始存档';download.onclick=()=>{const url=URL.createObjectURL(new Blob([localStorage.getItem(DEV_MODE?DEV_SAVE_KEY:SAVE_KEY)??''],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='damaged-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};mainContent.append(download);
         showNotice('存档无法读取',true);
     }
-    console.log('狗狗育种模拟器 V1.0.2 初始化完成');
+    console.log('狗狗育种模拟器 V1.0.3 初始化完成');
 }
 
 initGame();

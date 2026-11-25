@@ -11,7 +11,7 @@ for(const size of Object.keys(SIZE_CLASSES))assert.equal(getAllBreeds().filter(b
 assert.equal(initializeGame('测试','chihuahua',[' ','公犬']).success,false);assert.equal(gameState.initialized,false);
 assert.equal(initializeGame('测试','chihuahua',[' 小馄饨 ','狗主任']).success,true);
 const dogs=Object.values(gameState.activeAnimals);assert.equal(dogs.length,2);
-for(const dog of dogs){assert.equal(dog.name,dog.sex==='female'?'小馄饨':'狗主任');assert.equal(gameState.pedigreeRecords[dog.id].name,dog.name);assert.equal(renameAnimal(dog.id,'新名字').success,false);}
+for(const dog of dogs){assert.equal(dog.name,dog.sex==='female'?'小馄饨':'狗主任');assert.equal(gameState.pedigreeRecords[dog.id].name,dog.name);const original=dog.name;assert.equal(renameAnimal(dog.id,'新名字').success,true);assert.equal(renameAnimal(dog.id,original).success,true);}
 const migrated=migrateSave(gameState);for(const dog of dogs){assert.equal(migrated.activeAnimals[dog.id].name,dog.name);assert.equal(migrated.activeAnimals[dog.id].birthNamingUsed,true);assert.deepEqual(migrated.activeAnimals[dog.id].genotype,dog.genotype);}
 Object.assign(gameState,createGameState());assert.equal(initializeGame('测试','corgi').success,true);assert.equal(new Set(Object.values(gameState.activeAnimals).map(d=>d.name)).size,2);
 const ui=readFileSync(new URL('../ui/main.js',import.meta.url),'utf8');const setup=ui.slice(ui.indexOf('function renderNewGame()'),ui.indexOf('// 设施容量显示'));assert.ok(!setup.includes('weightRange')&&setup.includes('SIZE_CLASSES')&&setup.includes('starter-random'));
@@ -22,7 +22,7 @@ const old=createGameState();old.version='1.0.0';old.money=9999;
 const devKey='dogbreedsim:dev-save';const data=new Map([[SAVE_KEY,JSON.stringify(old)],[devKey,'untouched']]);
 const storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};
 const store=createSaveStore(storage), stale=createSaveStore(storage);
-assert.equal(store.load().version,'1.0.2');store.reset();
+assert.equal(store.load().version,'1.0.3');store.reset();
 assert.equal(data.get(SAVE_KEY+':reset-backup'),JSON.stringify(old));assert.equal(data.get(devKey),'untouched');
 assert.equal(store.load().initialized,false);assert.equal(store.load().money,createGameState().money);assert.throws(()=>stale.reset());
 assert.throws(()=>stale.save(old));

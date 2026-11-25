@@ -277,14 +277,14 @@ export function renameAnimal(id, newName) {
     }
 
     if (animal.source === "rental") return {success:false,message:"租借犬不可改名"};
-    if (animal.birthNamingUsed) return {success:false,message:"出生免费命名机会已使用"};
+    if (typeof newName !== "string") return {success:false,message:"名称格式无效"};
 
     const name = newName.trim();
 
-    if (!name || name.length > 20) {
+    if (!name || [...name].length > 20 || /[\u0000-\u001f\u007f]/u.test(name)) {
         return {
             success: false,
-            message: "名称长度必须为1至20个字符"
+            message: "名称长度必须为1至20个字符，不能含控制字符"
         };
     }
 
@@ -294,6 +294,13 @@ export function renameAnimal(id, newName) {
 
     // 同步永久血统档案
     gameState.pedigreeRecords[id].name = name;
+    for (const egg of gameState.incubationTasks) {
+        if (egg.motherId === id) egg.motherName = name;
+        if (egg.fatherId === id) egg.fatherName = name;
+    }
+    for (const record of gameState.competitionRecords) {
+        if (record.animalId === id) record.name = name;
+    }
 
     addEvent(
         `${oldName}更名为${name}。`
