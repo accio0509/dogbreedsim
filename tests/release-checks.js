@@ -1,0 +1,53 @@
+import {createAnimal} from '../engine/animal.js';
+import {checkBreedingPair,getRemainingBreedings,getRemainingCooldown} from '../engine/breeding.js';
+import {INCUBATION_MS as DAY} from '../engine/egg.js';
+import {createBreedingIntegration,prepareBreedingState,getPlacement} from '../engine/breedingIntegration.js';
+export function runReleaseChecks(breedId){
+    const t=Date.now(), results=[];
+    const test=(name,fn)=>{try{if(!fn())throw Error('结果不符');results.push({name,success:true});}catch(e){results.push({name,success:false,message:e.message});}};
+    const dog=(id,sex)=>createAnimal({id,name:id,breedId,sex,stage:'adult',location:'nursery'});
+    const make=()=>{const activeAnimals=[dog('F','female'),dog('M','male'),dog('U-F','female'),dog('U-M','male')];return {version:'0.3.0',money:1234,kennelName:'验收',nextAnimalId:77,facilities:{marker:2},activeAnimals,pedigreeRecords:Object.fromEntries(activeAnimals.map(a=>[a.id,structuredClone(a)])),breedingTasks:[],incubationTasks:[]};};
+    const ok=r=>{if(!r.success)throw Error(r.message);return r;};
+    const breed=(s,motherId,fatherId,id,at=t)=>s.breed({motherId,fatherId,eggId:'E-'+id,offspringId:id,at});
+    test('旧存档仅新增犬蛋字段',()=>{const a=make(),b=structuredClone(a);prepareBreedingState(a);return JSON.stringify(a)===JSON.stringify({...b,eggs:[]});});
+    test('异常旧任务不被覆盖',()=>{const a=make();a.incubationTasks.push({id:'legacy'});const b=JSON.stringify(a);try{prepareBreedingState(a);}catch{return JSON.stringify(a)===b;}return false;});
+    test('已有犬蛋原样保留',()=>{const a=make();a.eggs=[{id:'existing'}];return prepareBreedingState(a).eggs===a.eggs&&a.eggs.length===1;});
+    test('损坏犬蛋字段不自动覆盖',()=>{const a=make();a.eggs=null;try{prepareBreedingState(a);}catch{return a.eggs===null;}return false;});
+    test('饲育屋优先',()=>getPlacement({animals:[]})==='nursery');
+    test('饲育屋满后转电脑盒子',()=>getPlacement({animals:[{location:'nursery'}]},{nursery:1,computer:1})==='computer');
+    test('双满后进入等待安置',()=>getPlacement({animals:[{location:'nursery'},{location:'computer'}]},{nursery:1,computer:1})==='pending');
+    const a=make();let disk='',calls=0;const s=createBreedingIntegration({state:a,persist:d=>{calls++;disk=JSON.stringify(d);return true;}});
+    test('正式字段映射保留原始数组引用',()=>s.animals===a.activeAnimals&&s.eggs===a.eggs&&s.pedigreeRecords===a.pedigreeRecords);
+    let first;
+    test('首次产蛋完整保存',()=>{first=ok(breed(s,'F','M','C1')).egg;return a.eggs.length===1&&JSON.stringify(a)===disk;});
+    if(!first)return results;
+    test('货币设施计数器和旧任务未修改',()=>{const saved=JSON.parse(disk);return saved.money===1234&&saved.kennelName==='验收'&&saved.nextAnimalId===77&&saved.facilities.marker===2&&saved.breedingTasks.length===0&&saved.incubationTasks.length===0;});
+    test('孵化室满员不扣除另一组次数',()=>{const before=JSON.stringify(a),n=calls;return !breed(s,'U-F','U-M','BLOCK').success&&JSON.stringify(a)===before&&calls===n&&getRemainingBreedings(a.activeAnimals.find(d=>d.id==='U-F'))===10;});
+    test('提前1毫秒不能领取',()=>{const before=JSON.stringify(a);return !s.claim(first.id,'',t+DAY-1).success&&JSON.stringify(a)===before;});
+    let child;
+    test('重载后领取并保留遗传字段',()=>{const restored=JSON.parse(disk);const r=createBreedingIntegration({state:restored,persist:()=>true});const p=ok(r.claim(first.id,'',t+DAY)).puppy;return ['genotype','iv','sex','weightGene','pedigree','personality'].every(k=>JSON.stringify(p[k])===JSON.stringify(first.offspringData[k]));});
+    test('满24小时领取第一代',()=>{child=ok(s.claim(first.id,'第一代',t+DAY)).puppy;return a.eggs.length===0&&child.stage==='puppy'&&child.breeding.count===0;});
+    if(!child)return results;
+    test('领取释放孵化位且可再次繁育',()=>{const result=ok(breed(s,'F','M','C2',t+DAY));return a.eggs.length===1&&result.egg.offspringData.pedigree.motherId==='F';});
+    let sibling;
+    test('第二枚犬蛋正常领取',()=>{sibling=ok(s.claim('E-C2','',t+2*DAY)).puppy;return a.eggs.length===0;});
+    if(!sibling)return results;
+    // Advance life stage only in test fixtures; no changes to real growth logic.
+    const lookup=id=>a.activeAnimals.find(d=>d.id===id);
+    lookup('C1').stage='adult';lookup('C2').stage='adult';
+    const pair=(m,f)=>checkBreedingPair(m,f,a.pedigreeRecords,t+3*DAY);
+    const close=(x,y)=>typeof x==='number'&&Math.abs(x-y)<1e-8;
+    test('非亲缘亲本近交系数0%',()=>close(pair(lookup('U-F'),lookup('U-M')).inbreedingCoefficient,0));
+    test('全同胞近交系数25%',()=>{const m={...lookup('C1'),sex:'female'},f={...lookup('C2'),sex:'male'};return close(pair(m,f).inbreedingCoefficient,.25);});
+    const c=lookup('C1'),parent=lookup(c.sex==='female'?'M':'F');
+    const mother=c.sex==='female'?c:parent,father=c.sex==='male'?c:parent;
+    test('亲子回交近交系数25%',()=>close(pair(mother,father).inbreedingCoefficient,.25));
+    test('亲子回交可实际产蛋和领取',()=>{const x=structuredClone(a),v=createBreedingIntegration({state:x,persist:()=>true});const e=ok(breed(v,mother.id,father.id,'BACK',t+3*DAY)).egg;const p=ok(v.claim(e.id,'回交后代',t+4*DAY)).puppy;return p.pedigree.motherId===mother.id&&p.pedigree.fatherId===father.id&&x.pedigreeRecords.C1.pedigree.motherId==='F';});
+    const unrelated=lookup(c.sex==='female'?'U-M':'U-F');
+    let g2;
+    test('第一代成年后与无关犬繁育',()=>{g2=ok(breed(s,c.sex==='female'?c.id:unrelated.id,c.sex==='male'?c.id:unrelated.id,'G2',t+3*DAY)).egg;return a.eggs.length===1;});
+    if(g2){test('第二代领取并保留祖父母家谱',()=>{const p=ok(s.claim(g2.id,'第二代',t+4*DAY)).puppy;return p.pedigree.generation===3&&a.pedigreeRecords.C1.pedigree.motherId==='F'&&['F','M','C1','G2'].every(id=>Object.hasOwn(a.pedigreeRecords,id));});}
+    test('产蛋存档失败保留完整正式状态',()=>{const x=make(),v=createBreedingIntegration({state:x,persist:()=>false});const before=JSON.stringify(x);return !breed(v,'F','M','X').success&&JSON.stringify(x)===before;});
+    test('孵化室升级容量允许两枚犬蛋',()=>{const x=make(),v=createBreedingIntegration({state:x,getCapacity:()=>({nursery:10,computer:60,incubation:2}),persist:()=>true});return breed(v,'F','M','X').success&&breed(v,'U-F','U-M','Y').success&&x.eggs.length===2;});
+    return results;
+}

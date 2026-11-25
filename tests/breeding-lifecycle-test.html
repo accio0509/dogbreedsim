@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>V0.4.0 繁育与幼犬领取测试</title>
+<style>body{font:15px/1.6 system-ui,sans-serif;background:#f7f7f4;color:#26362c;margin:20px}main{max-width:780px;margin:auto}header,section.test,details{border:1px solid #d5dbd4;border-radius:12px;background:white;padding:16px;margin:16px 0}button,select{font:inherit;padding:8px;margin:4px}button{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere}.error{color:#a33131}.pass{color:#267744}</style></head>
+<body><main><h1>V0.4.0 繁育与幼犬领取测试</h1>
+<header><p>独立测试存档；繁育室与孵化室共用犬只及犬蛋列表，刷新页面可恢复。时间加速仅用于本测试页。</p>
+<label>犬种 <select id="breed"></select></label><button id="reset">重建测试存档</button><br>
+<button data-hours="12">推进12小时</button><button data-hours="24">推进24小时</button><button id="boundary">推进至最近犬蛋孵化时刻</button><button id="reload">刷新并恢复存档</button>
+<p id="clock"></p><p id="setup" role="status"></p></header>
+<section class="test"><div id="breeding"></div></section>
+<section class="test"><div id="incubation"></div></section>
+<section class="test"><h2>犬只列表与家谱</h2><div id="animals"></div><details><summary>完整家谱数据</summary><pre id="pedigree"></pre></details></section><section class="test"><h2>自动验收</h2><button id="lifecycle">运行繁育与领取测试</button><button id="verify">运行计时与序列化测试</button><div id="results" role="status"></div></section>
+<details><summary>犬蛋数据（仅测试可见）</summary><pre id="eggs">[]</pre></details>
+</main><script type="module">
+import {createAnimal} from '../engine/animal.js';
+import {getAllBreeds} from '../data/species/dog/breeds.js';
+import {INCUBATION_MS,getRemainingIncubation,getIncubationProgress,isEggReady,getEggStatus} from '../engine/egg.js';
+import {breedAndSave,claimEgg} from '../engine/breedingLifecycle.js';
+import {runLifecycleChecks} from './lifecycle-checks.js';
+import {mountBreedingRoom} from '../ui/breedingRoom.js';
+import {mountIncubationRoom,formatIncubationTime} from '../ui/incubationRoom.js';
+const $=s=>document.querySelector(s), HOUR=3600000;
+const KEY='dogbreedsim:v040:stage5:isolated-test:v1';
+const select=$('#breed'), setup=$('#setup');
+let state, breedingRoom, incubationRoom;
+const now=()=>Date.now()+(state?.offsetMs??0);
+function status(message,error=false){setup.textContent=message;setup.className=error?'error':'';}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));return true;}catch(error){status('测试存档写入失败，当前页面内仍可使用，但刷新可能丢失数据：'+error.message,true);return false;}}
+function persist(candidate){localStorage.setItem(KEY,JSON.stringify(candidate));return true;}
+function update(){
+    const list=$('#animals');list.replaceChildren();
+    for(const dog of state.animals){const p=document.createElement('p');p.textContent=`${dog.name||dog.id} · ${dog.sex==='male'?'♂':'♀'} · ${dog.stage==='puppy'?'幼犬':dog.stage==='adult'?'成年犬':dog.stage} · ${dog.id}`;list.append(p);}
+    $('#pedigree').textContent=JSON.stringify(state.pedigreeRecords,null,2);
+ $('#eggs').textContent=JSON.stringify(state.eggs,null,2);incubationRoom?.refresh();breedingRoom?.refresh(); }
+function showClock(){ $('#clock').textContent=`测试时间：${new Date(now()).toLocaleString()}（加速 ${((state?.offsetMs??0)/HOUR).toFixed(2)} 小时）`; }
+function mount(){breedingRoom?.destroy();incubationRoom?.destroy();
+    const {animals,eggs,pedigreeRecords}=state;
+    breedingRoom=mountBreedingRoom($('#breeding'),{animals,eggs,pedigreeRecords,now,executeBreeding:({mother,father,eggId,offspringId,now})=>breedAndSave({state,motherId:mother.id,fatherId:father.id,eggId,offspringId,now,persist}),onChange:()=>{status('产蛋成功，测试存档已保存。');update();}});
+    incubationRoom=mountIncubationRoom($('#incubation'),{eggs,now,onClaim:(eggId,name)=>{const result=claimEgg({state,eggId,name,now:now(),persist});status(result.message,!result.success);update();return result;}});update();showClock();
+}
+function reset(){
+    if(!select.value)throw new Error('犬种列表为空');
+    const dog=(id,name,sex)=>createAnimal({id,name,breedId:select.value,sex,stage:'adult',location:'nursery'});
+    const animals=[dog('TEST-M1','小麦','male'),dog('TEST-F1','栗子','female'),dog('TEST-M2','奶油','male'),dog('TEST-F2','团子','female')];
+    state={version:1,breedId:select.value,offsetMs:0,animals,eggs:[],pedigreeRecords:Object.fromEntries(animals.map(a=>[a.id,structuredClone(a)]))};
+    mount();if(save())status('已建立4只成年测试犬，可尝试两组亲本繁育。');
+}
+function restore(){
+    const raw=localStorage.getItem(KEY);if(raw===null)return false;
+    const saved=JSON.parse(raw);
+    if(saved?.version!==1||!Array.isArray(saved.animals)||!Array.isArray(saved.eggs)||!saved.pedigreeRecords||!Number.isFinite(saved.offsetMs)||saved.offsetMs<0)throw new Error('测试存档格式错误');
+    state=saved;select.value=saved.breedId;mount();status('已恢复测试存档。孵化进度按当前时间重新计算。');return true;
+}
+function advance(ms){if(!state)return;state.offsetMs+=Math.max(0,ms);if(save())status('已推进测试时间并保存。');update();showClock();}
+function verify(){
+    const out=$('#results');out.replaceChildren();let passed=0,failed=0;
+    function test(name,fn){const row=document.createElement('p');try{if(!fn())throw new Error('结果不符合预期');row.textContent='✓ '+name;row.className='pass';passed++;}catch(e){row.textContent='✗ '+name+'：'+e.message;row.className='error';failed++;}out.append(row);}
+    const t=1700000000000, egg={id:'FIXTURE',createdAt:t,hatchAt:t+INCUBATION_MS,offspringData:{genotype:{test:['A','a']}}};
+    const before=JSON.stringify(egg);
+    test('孵化周期为24小时',()=>INCUBATION_MS===24*HOUR);
+    test('产蛋时进度0%',()=>getIncubationProgress(egg,t)===0);
+    test('12小时进度50%',()=>getIncubationProgress(egg,t+12*HOUR)===50);
+    test('到期前1毫秒不可领取',()=>!isEggReady(egg,t+INCUBATION_MS-1));
+    test('恰好24小时进入待领取',()=>isEggReady(egg,t+INCUBATION_MS)&&getEggStatus(egg,t+INCUBATION_MS)==='ready');
+    test('超过48小时仍为待领取',()=>isEggReady(egg,t+48*HOUR)&&getIncubationProgress(egg,t+48*HOUR)===100);
+    test('到期后剩余时间为0',()=>getRemainingIncubation(egg,t+48*HOUR)===0);
+    test('产蛋前进度不小于0',()=>getIncubationProgress(egg,t-HOUR)===0);
+    test('不足1秒仍显示1秒',()=>formatIncubationTime(1)==='0小时00分01秒');
+    test('模拟离线：序列化后12小时恢复进度50%',()=>getIncubationProgress(JSON.parse(before),t+12*HOUR)===50);
+    test('模拟离线：序列化后24小时恢复待领取',()=>isEggReady(JSON.parse(before),t+24*HOUR));
+    test('计时计算不改变后代数据',()=>JSON.stringify(egg)===before);
+    const total=document.createElement('strong');total.textContent=`${passed} 项通过，${failed} 项失败`;total.className=failed?'error':'pass';out.append(total);
+}
+$('#reset').addEventListener('click',()=>{if(!confirm('清空本测试页的犬只和犬蛋并重建？不会修改正式游戏存档。'))return;try{reset();}catch(e){status('重建失败：'+e.message,true);}});
+for(const button of document.querySelectorAll('[data-hours]'))button.addEventListener('click',()=>advance(Number(button.dataset.hours)*HOUR));
+$('#boundary').addEventListener('click',()=>{if(!state)return;const t=now(),next=Math.min(...state.eggs.filter(e=>e.hatchAt>t).map(e=>e.hatchAt));if(!Number.isFinite(next)){status('没有正在孵化的犬蛋。');return;}advance(next-t);});
+$('#reload').addEventListener('click',()=>{if(state&&save())location.reload();});$('#verify').addEventListener('click',verify);
+$('#lifecycle').addEventListener('click',()=>{const out=$('#results');out.replaceChildren();try{const checks=runLifecycleChecks(select.value);for(const c of checks){const row=document.createElement('p');row.className=c.success?'pass':'error';row.textContent=(c.success?'✓ ':'✗ ')+c.name+(c.message?'：'+c.message:'');out.append(row);}const total=document.createElement('strong');total.textContent=`${checks.filter(c=>c.success).length} 项通过，${checks.filter(c=>!c.success).length} 项失败`;out.append(total);}catch(e){out.textContent='测试初始化失败：'+e.message;}});
+try{const raw=getAllBreeds();const entries=Array.isArray(raw)?raw.map(b=>[typeof b==='string'?b:b.id??b.breedId,b]):Object.entries(raw);for(const [key,b] of entries){const id=typeof b==='string'?b:b.id??b.breedId??key;if(id)select.add(new Option(typeof b==='string'?b:b.nameZh??b.nameCN??b.name??id,id));}if(!restore())reset();}catch(e){status('初始化失败：'+e.message+'。可尝试重建测试存档。',true);}
+setInterval(showClock,1000);
+</script></body></html>

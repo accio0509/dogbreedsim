@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {taskPercent,taskProgressMarkup} from '../ui/taskProgress.js';
+import {renderManagement} from '../ui/managementView.js';
+import {createGameState} from '../storage/state.js';
+import {ITEM_PRICES} from '../engine/management.js';
+const t={startedAt:100,endsAt:200};
+for(const [now,p] of [[0,0],[100,0],[150,50],[200,100],[300,100]])assert.equal(taskPercent(t,now),p);
+assert.equal(taskPercent({...t,endsAt:150},125),50);
+assert.match(taskProgressMarkup(t,150),/aria-valuenow="50"/);
+const root={innerHTML:''};renderManagement(root,createGameState());assert.match(root.innerHTML,/inventory-grid shop-grid/);assert.equal((root.innerHTML.match(/data-action="buy-item"/g)||[]).length,Object.keys(ITEM_PRICES).length);
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');assert.equal((html.match(/class="nav-group"/g)||[]).length,5);const pages=[...html.matchAll(/data-page="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(pages).size,16);assert.equal(pages.length,16);
+for(const file of ['trainingView','competitionView'])assert.match(readFileSync(new URL(`../ui/${file}.js`,import.meta.url),'utf8'),/taskProgressMarkup\(t,now\)/);
+assert(!readFileSync(new URL('../ui/explorationView.js',import.meta.url),'utf8').includes('可能遇见幼犬、道具或女巫'));
+console.log('RC1 UI checks passed');

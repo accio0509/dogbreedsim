@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>V0.3.0 突变引擎测试</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: auto;
+            max-width: 1000px;
+            padding: 30px;
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f3f5f2;
+            color: #303a32;
+        }
+
+        section {
+            background: white;
+            border: 1px solid #dce3dc;
+            border-radius: 8px;
+            margin: 15px 0;
+            padding: 20px;
+        }
+
+        h3 {
+            margin-top: 0;
+        }
+
+        .pass {
+            color: #38764c;
+        }
+
+        .fail {
+            color: #b94a48;
+        }
+
+        .muted {
+            color: #778178;
+        }
+
+        button {
+            background: #52765b;
+            color: white;
+            border: 0;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.8;
+        }
+
+        .colors {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .color-card {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .swatch {
+            height: 70px;
+            border-radius: 8px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<h1>V0.3.0 突变产生引擎测试</h1>
+
+<p class="muted">
+    自动验证突变产生、概率、显隐性和血统传递。
+</p>
+
+<section class="colors">
+
+    <div class="color-card">
+        <div class="swatch"
+             style="background:#D9CDE7"></div>
+        <p>浅雾紫 C12</p>
+    </div>
+
+    <div class="color-card">
+        <div class="swatch"
+             style="background:#8D739F"></div>
+        <p>灰紫 M12</p>
+    </div>
+
+    <div class="color-card">
+        <div class="swatch"
+             style="background:#37846B"></div>
+        <p>翡翠绿 E06</p>
+    </div>
+
+</section>
+
+<button id="run">
+    重新运行全部测试
+</button>
+
+<h2 id="summary">
+    准备测试……
+</h2>
+
+<div id="results"></div>
+
+
+<script type="module">
+
+import {
+    APPEARANCE_LOCI,
+    APPEARANCE_GENES,
+    getGene,
+    getMutationAlleles
+} from "../data/species/dog/appearance.js";
+
+import {
+    getAllBreeds
+} from "../data/species/dog/breeds.js";
+
+import {
+    createAnimal
+} from "../engine/animal.js";
+
+import {
+    createAllele,
+    generateAllele,
+    generateGenotype,
+    validateGenotype,
+    calculatePhenotype,
+    inheritGenotype,
+    hasMutation,
+    hasVisibleMutation,
+    getMutationRecords
+} from "../engine/genetics.js";
+
+import {
+    getBreedSizeDifference,
+    getMutationRate,
+    getMutationCandidates,
+    getEligibleMutationLoci,
+    applyMutation,
+    generateOffspringAppearance,
+    describeMutation
+} from "../engine/mutation.js";
+
+
+const N = 10000;
+
+let passed = 0;
+
+let failed = 0;
+
+const results =
+    document.getElementById("results");
+
+
+// ==========================================
+// 通用测试工具
+// ==========================================
+
+function assert(condition, message) {
+
+    if (!condition) {
+        throw new Error(message);
+    }
+
+}
+
+
+function near(actual, expected, tolerance = 0.02) {
+
+    assert(
+
+        Math.abs(actual - expected) <= tolerance,
+
+        `实际 ${actual}，预期 ${expected}`
+
+    );
+
+}
+
+
+function pct(value) {
+
+    return (value * 100).toFixed(2) + "%";
+
+}
+
+
+function expectError(fn) {
+
+    let rejected = false;
+
+    try {
+        fn();
+    } catch {
+        rejected = true;
+    }
+
+    assert(
+        rejected,
+        "应该拒绝非法数据，但未报错。"
+    );
+
+}
+
+
+function test(title, fn) {
+
+    const panel =
+        document.createElement("section");
+
+    const heading =
+        document.createElement("h3");
+
+    const content =
+        document.createElement("pre");
+
+    try {
+
+        const detail = fn();
+
+        heading.textContent =
+            "✓ " + title;
+
+        heading.className = "pass";
+
+        content.textContent =
+            detail ?? "测试通过";
+
+        passed++;
+
+    } catch (error) {
+
+        heading.textContent =
+            "✗ " + title;
+
+        heading.className = "fail";
+
+        content.textContent =
+            error.stack ?? error.message;
+
+        failed++;
+
+        console.error(title, error);
+
+    }
+
+    panel.append(
+        heading,
+        content
+    );
+
+    results.appendChild(panel);
+
+}
+
+
+// 创建指定犬种的亲本
+
+function makeParent(
+    breedId,
+    sex
+) {
+
+    return createAnimal({
+
+        id: breedId + "_" + sex,
+
+        breedId,
+
+        sex,
+
+        stage: "adult"
+
+    });
+
+}
+
+
+// ==========================================
+// 01 正式突变色数据库
+// ==========================================
+
+function testMutationDatabase() {
+
+    const expected = [
+
+        [
+            "coatColor",
+            "C12",
+            "浅雾紫",
+            "#D9CDE7",
+            4
+        ],
+
+        [
+            "patternColor",
+            "M12",
+            "灰紫",
+            "#8D739F",
+            4
+        ],
+
+        [
+            "eyeColor",
+            "E06",
+            "翡翠绿",
+            "#37846B",
+            3
+        ]
+
+    ];
+
+    for (
+        const [
+            locus,
+            id,
+            name,
+            hex,
+            dominance
+        ] of expected
+    ) {
+
+        const gene = getGene(locus, id);
+
+        assert(
+            gene,
+            "缺少正式突变色"
+        );
+
+        assert(
+            gene.name === name,
+            "颜色名称错误"
+        );
+
+        assert(
+            gene.hex === hex,
+            "HEX错误"
+        );
+
+        assert(
+            gene.dominance === dominance,
+            "显性等级错误"
+        );
+
+        assert(
+            gene.mutationOnly === true,
+            "缺少专属突变属性"
+        );
+
+        assert(
+
+            getMutationAlleles(locus).length === 1,
+
+            "突变候选数量错误"
+
+        );
+
+    }
+
+    // 检查每个位点显性等级是否唯一
+
+    for (
+        const locus of
+        Object.keys(APPEARANCE_LOCI)
+    ) {
+
+        const ranks = Object.values(
+            APPEARANCE_GENES[locus]
+        ).map(gene => gene.dominance);
+
+        assert(
+
+            new Set(ranks).size === ranks.length,
+
+            `${locus} 存在重复显性等级`
+
+        );
+
+    }
+
+    return "三种正式突变色及显性等级正确。";
+
+}
+
+
+// ==========================================
+// 02 突变概率计算
+// ==========================================
+
+function testMutationRates() {
+
+    const cases = [
+
+        ["corgi", "corgi", 0.05],
+
+        // 当前测试数据库每个体型只有一个犬种，
+        // 不同犬种同体型的8%分支暂不能用真实犬种测试。
+
+        ["corgi", "chihuahua", 0.12],
+
+        ["golden_retriever", "chihuahua", 0.18],
+
+        ["saint_bernard", "chihuahua", 0.25]
+
+    ];
+
+    const rows = [];
+
+    for (
+        const [
+            motherBreed,
+            fatherBreed,
+            expected
+        ] of cases
+    ) {
+
+        const mother = makeParent(
+            motherBreed,
+            "female"
+        );
+
+        const father = makeParent(
+            fatherBreed,
+            "male"
+        );
+
+        const actual = getMutationRate(
+            mother,
+            father
+        );
+
+        assert(
+            actual === expected,
+            "突变率计算错误"
+        );
+
+        const difference =
+            getBreedSizeDifference(
+                motherBreed,
+                fatherBreed
+            );
+
+        rows.push(
+
+            `${motherBreed} × ${fatherBreed}\n` +
+
+            `体型差 ${difference}，突变率 ${pct(actual)}`
+
+        );
+
+    }
+
+    return rows.join("\n\n");
+
+}
+
+
+// ==========================================
+// 03 实际突变概率模拟
+// ==========================================
+
+function testProbabilitySimulation() {
+
+    const genotype =
+        generateGenotype("corgi");
+
+    const rates = [
+
+        0.05,
+        0.08,
+        0.12,
+        0.18,
+        0.25
+
+    ];
+
+    const rows = [];
+
+    for (const rate of rates) {
+
+        let count = 0;
+
+        for (let i = 0; i < N; i++) {
+
+            const result = applyMutation(
+
+                genotype,
+
+                "corgi",
+
+                "TEST_" + i,
+
+                rate
+
+            );
+
+            if (result.occurred) {
+
+                count++;
+
+            }
+
+        }
+
+        const actual = count / N;
+
+        near(actual, rate, 0.02);
+
+        rows.push(
+
+            `预期 ${pct(rate)}，实际 ${pct(actual)}`
+
+        );
+
+    }
+
+    return rows.join("\n");
+
+}
+
+
+// ==========================================
+// 04 0%与100%概率边界
+// ==========================================
+
+function testProbabilityBoundary() {
+
+    const genotype =
+        generateGenotype("corgi");
+
+    for (let i = 0; i < 500; i++) {
+
+        const zero = applyMutation(
+
+            genotype,
+            "corgi",
+            "ZERO_" + i,
+            0
+
+        );
+
+        const full = applyMutation(
+
+            genotype,
+            "corgi",
+            "FULL_" + i,
+            1
+
+        );
+
+        assert(
+            !zero.triggered,
+            "0%概率触发突变"
+        );
+
+        assert(
+            full.occurred,
+            "100%概率未产生突变"
+        );
+
+    }
+
+    return "0%与100%概率均正常。";
+
+}
+
+
+// ==========================================
+// 05 三个位点等概率
+// ==========================================
+
+function testLocusDistribution() {
+
+    const genotype =
+        generateGenotype("corgi");
+
+    const counts = {
+
+        coatColor: 0,
+
+        patternColor: 0,
+
+        eyeColor: 0
+
+    };
+
+    for (let i = 0; i < N; i++) {
+
+        const result = applyMutation(
+
+            genotype,
+            "corgi",
+            "LOCUS_" + i,
+            1
+
+        );
+
+        counts[result.mutation.locus]++;
+
+    }
+
+    const rows = [];
+
+    for (
+        const [locus, count]
+        of Object.entries(counts)
+    ) {
+
+        near(
+            count / N,
+            1 / 3,
+            0.025
+        );
+
+        rows.push(
+
+            `${APPEARANCE_LOCI[locus]}：${pct(count / N)}`
+
+        );
+
+    }
+
+    return rows.join("\n");
+
+}
+
+
+// ==========================================
+// 06 母系与父系等概率
+// ==========================================
+
+function testAlleleSideDistribution() {
+
+    const genotype =
+        generateGenotype("corgi");
+
+    const counts = [0, 0];
+
+    for (let i = 0; i < N; i++) {
+
+        const result = applyMutation(
+
+            genotype,
+            "corgi",
+            "SIDE_" + i,
+            1
+
+        );
+
+        counts[
+            result.mutation.alleleIndex
+        ]++;
+
+    }
+
+    near(counts[0] / N, 0.5);
+
+    near(counts[1] / N, 0.5);
+
+    return (
+
+        `母系等位基因：${pct(counts[0] / N)}\n` +
+
+        `父系等位基因：${pct(counts[1] / N)}`
+
+    );
+
+}
+
+
+// ==========================================
+// 07 每个蛋最多一次新突变
+// ==========================================
+
+function testSingleMutation() {
+
+    const genotype =
+        generateGenotype("corgi");
+
+    const before =
+        JSON.stringify(genotype);
+
+    for (let i = 0; i < 1000; i++) {
+
+        const result = applyMutation(
+
+            genotype,
+            "corgi",
+            "SINGLE_" + i,
+            1
+
+        );
+
+        const records =
+            getMutationRecords(
+                result.genotype
+            );
+
+        assert(
+            records.length === 1,
+            "一次出现多个新突变"
+        );
+
+        let changed = 0;
+
+        for (
+            const locus of
+            Object.keys(APPEARANCE_LOCI)
+        ) {
+
+            for (let j = 0; j < 2; j++) {
+
+                if (
+
+                    JSON.stringify(
+                        genotype[locus][j]
+                    ) !==
+
+                    JSON.stringify(
+                        result.genotype[locus][j]
+                    )
+
+                ) {
+
+                    changed++;
+
+                }
+
+            }
+
+        }
+
+        assert(
+            changed === 1,
+            "修改了多个等位基因"
+        );
+
+    }
+
+    assert(
+
+        JSON.stringify(genotype) === before,
+
+        "突变修改了原始基因型"
+
+    );
+
+    return "每次只修改一个等位基因，原数据不变。";
+
+}
+
+
+// ==========================================
+// 08 禁止P、L突变
+// ==========================================
+
+function testForbiddenLoci() {
+
+    for (const breed of getAllBreeds()) {
+
+        assert(
+
+            getMutationCandidates(
+                breed.id,
+                "pattern"
+            ).length === 0,
+
+            "花纹类型可以突变"
+
+        );
+
+        assert(
+
+            getMutationCandidates(
+                breed.id,
+                "hairLength"
+            ).length === 0,
+
+            "毛发长度可以突变"
+
+        );
+
+        assert(
+
+            getEligibleMutationLoci(
+                breed.id
+            ).length === 3,
+
+            "允许突变位点不等于3"
+
+        );
+
+        const genotype =
+            generateGenotype(breed.id);
+
+        for (let i = 0; i < 500; i++) {
+
+            const result = applyMutation(
+
+                genotype,
+                breed.id,
+                "FORBIDDEN_" + i,
+                1
+
+            );
+
+            for (
+                const locus of [
+                    "pattern",
+                    "hairLength"
+                ]
+            ) {
+
+                assert(
+
+                    JSON.stringify(
+                        genotype[locus]
+                    ) ===
+
+                    JSON.stringify(
+                        result.genotype[locus]
+                    ),
+
+                    `${locus} 被非法修改`
+
+                );
+
+            }
+
+        }
+
+    }
+
+    return "所有犬种均禁止P、L突变。";
+
+}
+
+
+// ==========================================
+// 09 突变显隐性表现
+// ==========================================
+
+function testMutationDominance() {
+
+    const g =
+        generateGenotype("corgi");
+
+    // 浅雾紫 + 黑色：黑色表现
+
+    g.coatColor = [
+
+        createAllele("C12", true, "ORIGIN"),
+
+        createAllele("C001")
+
+    ];
+
+    assert(
+
+        calculatePhenotype(g)
+            .coatColor.allele === "C001",
+
+        "浅雾紫错误压过黑色"
+
+    );
+
+    // 浅雾紫 + 奶油色：浅雾紫表现
+
+    g.coatColor[1] =
+        createAllele("C005");
+
+    assert(
+
+        calculatePhenotype(g)
+            .coatColor.allele === "C12",
+
+        "浅雾紫不能压过奶油色"
+
+    );
+
+    // 灰紫 + 白色：灰紫表现
+
+    g.patternColor = [
+
+        createAllele("M12", true, "ORIGIN"),
+
+        createAllele("M005")
+
+    ];
+
+    assert(
+
+        calculatePhenotype(g)
+            .patternColor.allele === "M12",
+
+        "灰紫不能压过白色"
+
+    );
+
+    // 翡翠绿 + 深棕色：深棕色表现
+
+    g.eyeColor = [
+
+        createAllele("E06", true, "ORIGIN"),
+
+        createAllele("E001")
+
+    ];
+
+    assert(
+
+        calculatePhenotype(g)
+            .eyeColor.allele === "E001",
+
+        "翡翠绿错误压过深棕色"
+
+    );
+
+    // 翡翠绿 + 琥珀色：翡翠绿表现
+
+    g.eyeColor[1] =
+        createAllele("E003");
+
+    assert(
+
+        calculatePhenotype(g)
+            .eyeColor.allele === "E06",
+
+        "翡翠绿不能压过琥珀色"
+
+    );
+
+    return "三种突变色的显隐性表现符合配置。";
+
+}
+
+
+// ==========================================
+// 10 隐藏花纹突变
+// ==========================================
+
+function testHiddenMutation() {
+
+    const g = generateGenotype(
+        "golden_retriever"
+    );
+
+    g.patternColor = [
+
+        createAllele("M12", true, "ORIGIN"),
+
+        createAllele("M12", true, "ORIGIN")
+
+    ];
+
+    const p =
+        calculatePhenotype(g);
+
+    assert(
+        hasMutation(g),
+        "隐藏突变丢失"
+    );
+
+    assert(
+        !p.patternVisible,
+        "纯色错误显示花纹"
+    );
+
+    assert(
+        !hasVisibleMutation(p),
+        "隐藏花纹被错误计为可见突变"
+    );
+
+    return "纯色金毛可以携带灰紫，但不表现花纹。";
+
+}
+
+
+// ==========================================
+// 11 多代突变来源传递
+// ==========================================
+
+function testMultiGeneration() {
+
+    const origin = "DOG_ORIGINAL";
+
+    let mother = makeParent(
+
+        "corgi",
+        "female"
+
+    );
+
+    mother.genotype.coatColor = [
+
+        createAllele("C12", true, origin),
+
+        createAllele("C12", true, origin)
+
+    ];
+
+    for (let generation = 1;
+        generation <= 10;
+        generation++
+    ) {
+
+        const father = makeParent(
+
+            "corgi",
+            "male"
+
+        );
+
+        father.genotype.coatColor = [
+
+            createAllele("C12", true, origin),
+
+            createAllele("C12", true, origin)
+
+        ];
+
+        const genotype = inheritGenotype(
+
+            mother,
+            father
+
+        );
+
+        const records = getMutationRecords(
+            genotype
+        );
+
+        assert(
+
+            records.filter(
+                item => item.locus === "coatColor"
+            ).length === 2,
+
+            "纯合突变遗传丢失"
+
+        );
+
+        for (const record of records) {
+
+            assert(
+
+                record.mutationOrigin === origin,
+
+                "多代遗传后突变来源改变"
+
+            );
+
+        }
+
+        mother = createAnimal({
+
+            id: "GEN_" + generation,
+
+            breedId: "corgi",
+
+            source: "breeding",
+
+            sex: "female",
+
+            stage: "adult",
+
+            genotype
+
+        });
+
+    }
+
+    return "连续10代遗传，突变来源始终不变。";
+
+}
+
+
+// ==========================================
+// 12 跨犬种突变传递
+// ==========================================
+
+function testCrossBreedMutation() {
+
+    const mother = makeParent(
+
+        "golden_retriever",
+        "female"
+
+    );
+
+    const father = makeParent(
+
+        "chihuahua",
+        "male"
+
+    );
+
+    father.genotype.coatColor = [
+
+        createAllele("C12", true, "ORIGIN"),
+
+        createAllele("C12", true, "ORIGIN")
+
+    ];
+
+    for (let i = 0; i < 1000; i++) {
+
+        const child = inheritGenotype(
+
+            mother,
+            father
+
+        );
+
+        const allele =
+            child.coatColor[1];
+
+        assert(
+            allele.allele === "C12",
+            "跨犬种突变被错误清除"
+        );
+
+        assert(
+            allele.mutationOrigin === "ORIGIN",
+            "跨犬种突变来源丢失"
+        );
+
+    }
+
+    return "吉娃娃的专属突变色可以遗传给金毛后代。";
+
+}
+
+
+// ==========================================
+// 13 重复突变不覆盖原来源
+// ==========================================
+
+function testRepeatedMutation() {
+
+    const genotype =
+        generateGenotype("corgi");
+
+    const mutations = {
+
+        coatColor: "C12",
+
+        patternColor: "M12",
+
+        eyeColor: "E06"
+
+    };
+
+    // 将三个颜色位点设置为突变纯合
+    for (
+        const [locus, id]
+        of Object.entries(mutations)
+    ) {
+
+        genotype[locus] = [
+
+            createAllele(id, true, "OLD_ORIGIN"),
+
+            createAllele(id, true, "OLD_ORIGIN")
+
+        ];
+
+    }
+
+    for (let i = 0; i < 500; i++) {
+
+        const result = applyMutation(
+
+            genotype,
+            "corgi",
+            "NEW_ORIGIN",
+            1
+
+        );
+
+        assert(
+            result.triggered,
+            "突变未触发"
+        );
+
+        assert(
+            !result.occurred,
+            "相同颜色被错误计为新突变"
+        );
+
+        assert(
+            result.reason === "same_allele",
+            "重复突变状态错误"
+        );
+
+        assert(
+
+            JSON.stringify(result.genotype) ===
+            JSON.stringify(genotype),
+
+            "重复突变修改了原始来源"
+
+        );
+
+    }
+
+    return "重复命中已有突变色时，保留原始起源。";
+
+}
+
+
+// ==========================================
+// 14 非法突变数据保护
+// ==========================================
+
+function testInvalidMutationProtection() {
+
+    const g =
+        generateGenotype("corgi");
+
+    // 无突变标记的专属突变色
+
+    const invalid1 =
+        structuredClone(g);
+
+    invalid1.coatColor[0] =
+        createAllele("C12");
+
+    expectError(
+        () => validateGenotype(invalid1)
+    );
+
+    // 无突变来源
+
+    const invalid2 =
+        structuredClone(g);
+
+    invalid2.coatColor[0] =
+        createAllele("C12", true, null);
+
+    expectError(
+        () => validateGenotype(invalid2)
+    );
+
+    // 普通颜色冒充突变
+
+    const invalid3 =
+        structuredClone(g);
+
+    invalid3.coatColor[0] =
+        createAllele(
+            "C001",
+            true,
+            "ORIGIN"
+        );
+
+    expectError(
+        () => validateGenotype(invalid3)
+    );
+
+    // 非法概率
+
+    expectError(
+
+        () => applyMutation(
+            g,
+            "corgi",
+            "TEST",
+            1.5
+        )
+
+    );
+
+    // 错误的普通基因池也不会产出专属突变色
+
+    const invalidPool = {
+
+        normal: ["C001", "C12"],
+
+        rare: ["C12"]
+
+    };
+
+    for (let i = 0; i < 500; i++) {
+
+        const allele = generateAllele(
+
+            invalidPool,
+
+            "coatColor",
+
+            "market"
+
+        );
+
+        assert(
+
+            allele.allele === "C001",
+
+            "错误配置导致普通来源出现突变色"
+
+        );
+
+    }
+
+    return "所有非法突变数据及错误配置均得到拦截。";
+
+}
+
+
+// ==========================================
+// 15 多个突变可以在后代累积
+// ==========================================
+
+function testMutationAccumulation() {
+
+    const mother = makeParent(
+
+        "corgi",
+        "female"
+
+    );
+
+    const father = makeParent(
+
+        "corgi",
+        "male"
+
+    );
+
+    mother.genotype.coatColor = [
+
+        createAllele("C12", true, "COAT_ORIGIN"),
+
+        createAllele("C12", true, "COAT_ORIGIN")
+
+    ];
+
+    father.genotype.eyeColor = [
+
+        createAllele("E06", true, "EYE_ORIGIN"),
+
+        createAllele("E06", true, "EYE_ORIGIN")
+
+    ];
+
+    const child = inheritGenotype(
+
+        mother,
+
+        father
+
+    );
+
+    assert(
+
+        getMutationRecords(child).length === 2,
+
+        "两个不同位点的突变不能同时遗传"
+
+    );
+
+    // 在原有两个遗传突变基础上尝试新突变
+
+    let foundThree = false;
+
+    for (let i = 0; i < 1000; i++) {
+
+        const result = applyMutation(
+
+            child,
+
+            "corgi",
+
+            "THIRD_ORIGIN_" + i,
+
+            1
+
+        );
+
+        if (
+
+            result.occurred &&
+
+            getMutationRecords(
+                result.genotype
+            ).length === 3
+
+        ) {
+
+            foundThree = true;
+
+            break;
+
+        }
+
+    }
+
+    assert(
+        foundThree,
+        "已有突变无法继续累积"
+    );
+
+    return "遗传突变与新突变能够同时存在。";
+
+}
+
+
+// ==========================================
+// 16 完整后代外貌生成
+// ==========================================
+
+function testCompleteOffspring() {
+
+    const mother = makeParent(
+
+        "corgi",
+        "female"
+
+    );
+
+    const father = makeParent(
+
+        "chihuahua",
+        "male"
+
+    );
+
+    let triggered = 0;
+
+    let occurred = 0;
+
+    let visible = 0;
+
+    let example = "";
+
+    for (let i = 0; i < N; i++) {
+
+        const id = "CHILD_" + i;
+
+        const child =
+            generateOffspringAppearance(
+
+                mother,
+
+                father,
+
+                id
+
+            );
+
+        assert(
+
+            child.breedId === mother.breedId,
+
+            "后代犬种不是母系犬种"
+
+        );
+
+        assert(
+
+            validateGenotype(child.genotype),
+
+            "后代基因型非法"
+
+        );
+
+        assert(
+
+            child.mutationRate === 0.12,
+
+            "后代突变率错误"
+
+        );
+
+        if (child.mutationTriggered) {
+            triggered++;
+        }
+
+        if (child.newMutationOccurred) {
+
+            occurred++;
+
+            assert(
+
+                child.newMutation.mutationOrigin
+                    === id,
+
+                "新突变来源错误"
+
+            );
+
+            if (!example) {
+
+                example = describeMutation(
+                    child.newMutation
+                );
+
+            }
+
+        }
+
+        if (child.visibleMutation) {
+            visible++;
+        }
+
+    }
+
+    near(triggered / N, 0.12);
+
+    near(occurred / N, 0.12);
+
+    return [
+
+        "柯基母犬 × 吉娃娃公犬",
+
+        `模拟后代：${N}`,
+
+        `突变触发率：${pct(triggered / N)}`,
+
+        `新突变产生率：${pct(occurred / N)}`,
+
+        `可见突变率：${pct(visible / N)}`,
+
+        `突变记录示例：${example}`
+
+    ].join("\n");
+
+}
+
+
+// ==========================================
+// 运行全部测试
+// ==========================================
+
+function runAllTests() {
+
+    results.innerHTML = "";
+
+    passed = 0;
+
+    failed = 0;
+
+    const start = performance.now();
+
+    const tests = [
+
+        ["01 正式突变色数据库", testMutationDatabase],
+
+        ["02 犬种组合突变概率", testMutationRates],
+
+        ["03 实际突变概率模拟", testProbabilitySimulation],
+
+        ["04 概率边界", testProbabilityBoundary],
+
+        ["05 三个突变位点等概率", testLocusDistribution],
+
+        ["06 母系与父系等概率", testAlleleSideDistribution],
+
+        ["07 每蛋最多一次新突变", testSingleMutation],
+
+        ["08 禁止P和L突变", testForbiddenLoci],
+
+        ["09 突变显隐性表现", testMutationDominance],
+
+        ["10 隐藏花纹突变", testHiddenMutation],
+
+        ["11 多代突变来源传递", testMultiGeneration],
+
+        ["12 跨犬种突变传递", testCrossBreedMutation],
+
+        ["13 重复突变来源保护", testRepeatedMutation],
+
+        ["14 非法突变数据保护", testInvalidMutationProtection],
+
+        ["15 多个突变累积", testMutationAccumulation],
+
+        ["16 完整后代外貌生成", testCompleteOffspring]
+
+    ];
+
+    for (const [title, fn] of tests) {
+
+        test(title, fn);
+
+    }
+
+    const elapsed = (
+
+        (performance.now() - start) / 1000
+
+    ).toFixed(2);
+
+    const summary =
+        document.getElementById("summary");
+
+    summary.textContent =
+
+        `${passed}/${passed + failed} 项通过` +
+
+        `｜失败 ${failed} 项` +
+
+        `｜耗时 ${elapsed} 秒`;
+
+    summary.className =
+        failed === 0 ? "pass" : "fail";
+
+}
+
+
+document.getElementById("run")
+
+    .addEventListener(
+        "click",
+        runAllTests
+    );
+
+
+runAllTests();
+
+</script>
+
+</body>
+</html>

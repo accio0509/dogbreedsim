@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>V0.4.0 繁育室测试</title>
+<style>body{font:15px/1.6 system-ui,sans-serif;background:#f7f7f4;color:#26362c;margin:20px}main{max-width:780px;margin:auto}header,details{border:1px solid #d5dbd4;border-radius:12px;background:white;padding:16px;margin:16px 0}select,button{font:inherit;padding:8px;margin:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.error{color:#a33131}</style></head>
+<body><main>
+<h1>V0.4.0 繁育室测试</h1>
+<header><p>测试专用：自动读取犬种，生成亲本，不改动正式存档。</p>
+<label>犬种 <select id="breed"></select></label><button id="reset">重建测试犬只</button>
+<button id="advance">模拟经过24小时</button><p id="setup" role="status"></p></header>
+<div id="room"></div><details open><summary>犬蛋数据（仅测试可见）</summary><pre id="eggs">[]</pre></details>
+<p>刷新页面会清空测试数据。正式存档接入留待后续阶段。</p></main>
+<script type="module">
+import {createAnimal} from '../engine/animal.js';
+import {getAllBreeds} from '../data/species/dog/breeds.js';
+import {mountBreedingRoom} from '../ui/breedingRoom.js';
+const breedSelect=document.querySelector('#breed');
+const setup=document.querySelector('#setup');
+const output=document.querySelector('#eggs');
+const DAY=24*60*60*1000;
+let room, clock=Date.now(), animals=[], eggs=[], pedigreeRecords={};
+const raw=getAllBreeds();
+const entries=Array.isArray(raw)?raw.map(b=>[typeof b==='string'?b:b.id??b.breedId,b]):Object.entries(raw);
+for(const [key,b] of entries){const id=typeof b==='string'?b:b.id??b.breedId??key;if(id)breedSelect.add(new Option(typeof b==='string'?b:b.nameZh??b.nameCN??b.name??id,id));}
+function update(){output.textContent=JSON.stringify(eggs,null,2);}
+function reset(){
+    try{
+        if(!breedSelect.value)throw new Error('犬种列表为空');
+        room?.destroy(); clock=Date.now();eggs=[];
+        const dog=(id,name,sex,stage='adult')=>createAnimal({id,name,breedId:breedSelect.value,sex,stage,location:'nursery'});
+        animals=[dog('TEST-M1','小麦','male'),dog('TEST-F1','栗子','female'),dog('TEST-M2','芝麻','male','puppy'),dog('TEST-F2','团子','female'),dog('TEST-M3','奶油','male')];
+        animals[3].breeding={count:10,lastSuccessAt:null};
+        animals[4].breeding={count:1,lastSuccessAt:clock};
+        pedigreeRecords=Object.fromEntries(animals.map(a=>[a.id,structuredClone(a)]));
+        room=mountBreedingRoom(document.querySelector('#room'),{animals,eggs,pedigreeRecords,now:()=>clock,onChange:update});
+        setup.textContent='已生成5只测试犬：小麦、栗子可尝试繁育；芝麻未成年；团子次数耗尽；奶油冷却中。';setup.className='';update();
+    }catch(error){setup.textContent='初始化失败：'+error.message;setup.className='error';}
+}
+document.querySelector('#reset').addEventListener('click',reset);
+document.querySelector('#advance').addEventListener('click',()=>{clock+=DAY;room?.refresh();update();setup.textContent='测试时间已推进24小时。';});
+reset();
+</script></body></html>

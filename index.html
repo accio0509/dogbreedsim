@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>狗狗育种模拟器</title>
+
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+
+    <header class="header">
+        <h1>狗狗育种模拟器</h1>
+
+        <div class="header-info">
+            <span id="dev-indicator" hidden style="color:#a15d22;font-weight:bold">开发模式 · 独立存档</span>
+            <span id="money-display">金钱：0</span>
+            <span id="real-time"></span>
+        </div>
+    </header>
+
+    <div class="game-layout">
+
+        <aside class="sidebar">
+
+            <div class="kennel-title"
+                 id="sidebar-kennel-name">
+                未命名犬舍
+            </div>
+
+            <nav id="navigation">
+                <div class="nav-group">
+                    <button data-page="overview">犬舍总览</button>
+                    <button data-page="nursery">饲育屋</button>
+                    <button data-page="computer">电脑盒子</button>
+                </div>
+                <div class="nav-group">
+                    <button data-page="breeding">繁育中心</button>
+                    <button data-page="incubation">孵化室</button>
+                    <button data-page="pedigree">血统家谱</button>
+                </div>
+                <div class="nav-group">
+                    <button data-page="exploration">地图探索</button>
+                    <button data-page="training">训练</button>
+                    <button data-page="competition">犬只比赛</button>
+                </div>
+                <div class="nav-group">
+                    <button data-page="market">犬只市场</button>
+                    <button data-page="management">犬舍经营</button>
+                    <button data-page="warehouse">道具仓库</button>
+                </div>
+                <div class="nav-group">
+                    <button data-page="collection">性状图鉴</button>
+                    <button data-page="events">事件记录</button>
+                    <button data-page="settings">游戏设置</button>
+                </div>
+                <button id="dev-navigation" data-page="dev" hidden>开发者工具</button>
+            </nav>
+
+        </aside>
+
+        <div id="game-notice" role="status" style="position:fixed;bottom:44px;right:20px;background:#fff;padding:4px 10px;border-radius:6px;z-index:10;pointer-events:none" aria-live="polite"></div>
+        <main id="main-content">
+        </main>
+
+    </div>
+
+    <footer class="footer">
+        狗狗育种模拟器 · V1.0.0
+    </footer>
+
+    <dialog id="animal-dialog">
+
+        <div class="dialog-header">
+
+            <h2>犬只详情</h2>
+
+            <button id="close-dialog"
+                    class="secondary-button">
+                关闭
+            </button>
+
+        </div>
+
+        <div id="animal-detail"></div>
+
+    </dialog>
+
+    <script type="module" src="./ui/main.js"></script>
+
+</body>
+
+</html>

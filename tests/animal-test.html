@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>犬只生成测试</title>
+</head>
+
+<body>
+
+    <h1>犬只生成测试</h1>
+
+    <p>请按 F12 打开控制台查看结果。</p>
+
+    <script type="module">
+
+        import {
+            createAnimal,
+            formatAnimalId,
+            calculateAdultWeight,
+            calculateCurrentWeight,
+            getAnimalPhenotype
+        } from "../engine/animal.js";
+
+        import {
+            calculateStats,
+            calculateTotal
+        } from "../engine/stats.js";
+
+        const breeds = [
+            "chihuahua",
+            "corgi",
+            "golden_retriever",
+            "saint_bernard"
+        ];
+
+        for (let i = 0; i < breeds.length; i++) {
+
+            const animal = createAnimal({
+                id: formatAnimalId(i + 1),
+                breedId: breeds[i],
+                source: "starter"
+            });
+
+            console.log("犬只信息", animal);
+
+            console.log(
+                "表型",
+                getAnimalPhenotype(animal)
+            );
+
+            console.log(
+                "成年体重",
+                calculateAdultWeight(animal)
+            );
+
+            console.log(
+                "当前体重",
+                calculateCurrentWeight(animal)
+            );
+
+            console.log(
+                "实际能力",
+                calculateStats(animal)
+            );
+
+            console.log(
+                "个体值总和",
+                calculateTotal(animal.iv)
+            );
+        }
+
+        console.log("全部犬只生成测试完成");
+
+    </script>
+
+</body>
+</html>

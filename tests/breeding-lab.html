@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+    <title>犬只遗传实验室 V0.3.0</title>
+
+    <style>
+        :root {
+            --bg: #f3f5f2;
+            --green: #52765b;
+            --border: #dce3dc;
+            --text: #303a32;
+            --muted: #778178;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background: var(--bg);
+            font: 14px "Microsoft YaHei", sans-serif;
+        }
+
+        header {
+            background: var(--green);
+            color: white;
+            padding: 18px 28px;
+        }
+
+        header h1 {
+            margin: 0 0 6px;
+            font-size: 23px;
+        }
+
+        main {
+            max-width: 1280px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .panel {
+            padding: 18px;
+            margin-bottom: 16px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .metric {
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 14px;
+        }
+
+        .metric strong {
+            display: block;
+            font-size: 22px;
+            margin-top: 8px;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .between {
+            justify-content: space-between;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        h2 { font-size: 19px; }
+        h3 { font-size: 16px; }
+
+        h2, h3 {
+            margin-top: 0;
+        }
+
+        button, select, input {
+            font: inherit;
+            padding: 8px 10px;
+            border-radius: 5px;
+        }
+
+        select, input {
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text);
+        }
+
+        select {
+            max-width: 100%;
+        }
+
+        input[type="number"] {
+            width: 75px;
+        }
+
+        button {
+            background: var(--green);
+            color: white;
+            border: 1px solid var(--green);
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: white;
+            color: var(--green);
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg);
+            font-weight: normal;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        .swatch {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+
+        .track {
+            height: 10px;
+            background: #e7ebe6;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .fill {
+            height: 100%;
+            background: #83a58a;
+        }
+
+        .distribution {
+            margin: 10px 0;
+        }
+
+        .distribution .row {
+            margin-bottom: 5px;
+        }
+
+        .success { color: #38764c; }
+        .warning { color: #a37b38; }
+        .error { color: #b94a48; }
+
+        details {
+            margin-top: 12px;
+        }
+
+        summary {
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        #status {
+            white-space: pre-wrap;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>犬只遗传实验室</h1>
+    V0.3.0 · 独立模拟模式
+</header>
+
+<main>
+
+    <section class="panel">
+        <h2>亲本设置</h2>
+
+        <div class="row">
+
+            <label>
+                母系犬种
+                <select id="mother-breed"></select>
+            </label>
+
+            <label>
+                父系犬种
+                <select id="father-breed"></select>
+            </label>
+
+            <label>
+                血统关系
+                <select id="relationship">
+                    <option value="unrelated">无亲缘关系</option>
+                    <option value="siblings">全同胞</option>
+                    <option value="half">半同胞</option>
+                    <option value="backcross">父女回交</option>
+                    <option value="cousins">堂亲/表亲</option>
+                </select>
+            </label>
+
+            <button id="reset-parents">
+                生成亲本
+            </button>
+
+        </div>
+
+        <p class="muted">
+            近亲关系预设使用同一犬种建立模拟家谱。
+            修改基因仅用于受控实验，不影响正式游戏。
+        </p>
+    </section>
+
+    <div class="grid">
+
+        <section class="panel" id="mother-panel"></section>
+
+        <section class="panel" id="father-panel"></section>
+
+    </div>
+
+    <section class="panel">
+        <h2>繁育条件</h2>
+        <div id="eligibility"></div>
+    </section>
+
+    <section class="panel">
+        <h2>运行模拟</h2>
+
+        <div class="row">
+
+            <button data-count="1">模拟1只</button>
+
+            <button data-count="100">模拟100只</button>
+
+            <button data-count="1000">模拟1000只</button>
+
+            <button data-count="10000">模拟10000只</button>
+
+            <button class="secondary" id="export-csv" disabled>
+                导出CSV
+            </button>
+
+        </div>
+
+        <p id="status" role="status" aria-live="polite">
+            尚未运行模拟。
+        </p>
+
+        <p class="muted">
+            每个样本代表一个成功产生的蛋，
+            不模拟产蛋失败、现实等待或繁育次数消耗。
+        </p>
+
+    </section>
+
+    <div id="results"></div>
+
+</main>
+
+<script type="module">
+
+import {
+    GAME_CONFIG
+} from "../config/game.js";
+
+import {
+    getAllBreeds,
+    getBreed,
+    getBreedAppearance
+} from "../data/species/dog/breeds.js";
+
+import {
+    PERSONALITIES
+} from "../data/species/dog/personalities.js";
+
+import {
+    APPEARANCE_LOCI,
+    getGene
+} from "../data/species/dog/appearance.js";
+
+import {
+    createAnimal,
+    calculateAdultWeight
+} from "../engine/animal.js";
+
+import {
+    STAT_KEYS,
+    STAT_NAMES,
+    calculateTotal
+} from "../engine/stats.js";
+
+import {
+    createAllele,
+    getAllowedAlleles,
+    calculatePhenotype,
+    hasMutation,
+    hasVisibleMutation
+} from "../engine/genetics.js";
+
+import {
+    getMutationCandidates,
+    getMutationRate
+} from "../engine/mutation.js";
+
+import {
+    checkBreedingPair
+} from "../engine/breeding.js";
+
+import {
+    generateOffspringData
+} from "../engine/offspring.js";
+
+import {
+    simulateBreeding,
+    offspringToCSV
+} from "../engine/simulation.js";
+
+
+// ==================================================
+// 1. 实验室独立状态
+// ==================================================
+
+let mother = null;
+
+let father = null;
+
+let records = Object.create(null);
+
+let result = null;
+
+let nextId = 1;
+
+let busy = false;
+
+let batchNumber = 0;
+
+const $ = id => document.getElementById(id);
+
+const status = $("status");
+
+
+function newId() {
+
+    return "LAB" +
+
+        String(nextId++).padStart(6, "0");
+
+}
+
+
+function escapeHTML(value) {
+
+    return String(value ?? "").replace(
+
+        /[&<>"']/g,
+
+        char => ({
+
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+
+        })[char]
+
+    );
+
+}
+
+
+function pct(value) {
+
+    return (value * 100).toFixed(2) + "%";
+
+}
+
+
+function saveRecord(animal) {
+
+    records[animal.id] =
+        structuredClone(animal);
+
+}
+
+
+function setStatus(message, error = false) {
+
+    status.textContent = message;
+
+    status.className =
+        error ? "error" : "muted";
+
+}
+
+
+function clearResult() {
+
+    result = null;
+
+    $("results").innerHTML = "";
+
+    $("export-csv").disabled = true;
+
+}
+
+
+// ==================================================
+// 2. 创建亲本及模拟家谱
+// ==================================================
+
+function founder(breedId, sex) {
+
+    const id = newId();
+
+    const animal = createAnimal({
+
+        id,
+
+        breedId,
+
+        sex,
+
+        stage: "adult",
+
+        name:
+
+            getBreed(breedId).name +
+
+            id.slice(-3)
+
+    });
+
+    saveRecord(animal);
+
+    return animal;
+
+}
+
+
+function descendant(m, f, sex) {
+
+    const data = generateOffspringData(
+
+        m,
+
+        f,
+
+        newId(),
+
+        records
+
+    );
+
+    // 家谱预设中的后代直接成长为成年犬。
+    // 指定性别仅用于建立实验家谱。
+
+    const animal = createAnimal({
+
+        ...data,
+
+        sex,
+
+        stage: "adult",
+
+        location: "nursery"
+
+    });
+
+    saveRecord(animal);
+
+    return animal;
+
+}
+
+
+function resetParents() {
+
+    const motherBreed =
+        $("mother-breed").value;
+
+    const fatherBreed =
+        $("father-breed").value;
+
+    const relationship =
+        $("relationship").value;
+
+    if (
+
+        relationship !== "unrelated" &&
+
+        motherBreed !== fatherBreed
+
+    ) {
+
+        setStatus(
+
+            "近亲家谱预设需要选择相同犬种。",
+
+            true
+
+        );
+
+        return;
+
+    }
+
+    records = Object.create(null);
+
+    clearResult();
+
+    if (relationship === "unrelated") {
+
+        mother = founder(
+            motherBreed, "female"
+        );
+
+        father = founder(
+            fatherBreed, "male"
+        );
+
+    } else {
+
+        const A = founder(
+            motherBreed, "female"
+        );
+
+        const B = founder(
+            motherBreed, "male"
+        );
+
+        if (relationship === "siblings") {
+
+            mother = descendant(
+                A, B, "female"
+            );
+
+            father = descendant(
+                A, B, "male"
+            );
+
+        }
+
+        if (relationship === "half") {
+
+            const C = founder(
+                motherBreed, "female"
+            );
+
+            mother = descendant(
+                A, B, "female"
+            );
+
+            father = descendant(
+                C, B, "male"
+            );
+
+        }
+
+        if (relationship === "backcross") {
+
+            mother = descendant(
+                A, B, "female"
+            );
+
+            father = B;
+
+        }
+
+        if (relationship === "cousins") {
+
+            const C = descendant(
+                A, B, "female"
+            );
+
+            const D = descendant(
+                A, B, "male"
+            );
+
+            const E = founder(
+                motherBreed, "female"
+            );
+
+            const F = founder(
+                motherBreed, "male"
+            );
+
+            mother = descendant(
+                C, F, "female"
+            );
+
+            father = descendant(
+                E, D, "male"
+            );
+
+        }
+
+    }
+
+    renderParents();
+
+    setStatus("已生成新的实验亲本。");
+
+}
+
+
+// ==================================================
+// 3. 亲本编辑器
+// ==================================================
+
+function alleleOptions(animal, locus, selected) {
+
+    const pool =
+        getBreedAppearance(animal.breedId)[locus];
+
+    const ids = [
+
+        ...getAllowedAlleles(pool, locus),
+
+        ...getMutationCandidates(
+            animal.breedId, locus
+        ),
+
+        // 保留跨犬种继承的特殊突变
+        selected
+
+    ];
+
+    return [...new Set(ids)].map(id => {
+
+        const gene = getGene(locus, id);
+
+        if (!gene) return "";
+
+        return `
+
+            <option value="${escapeHTML(id)}"
+                ${selected === id ? "selected" : ""}>
+
+                ${escapeHTML(gene.name)}
+
+                ${gene.mutationOnly ? "★" : ""}
+
+                (${id} · D${gene.dominance})
+
+            </option>
+
+        `;
+
+    }).join("");
+
+}
+
+
+function renderParent(animal, side) {
+
+    const breed = getBreed(animal.breedId);
+
+    const phenotype =
+        calculatePhenotype(animal.genotype);
+
+    return `
+
+        <div class="row between">
+
+            <h2>
+                ${side === "mother" ? "母犬 ♀" : "公犬 ♂"}
+            </h2>
+
+            <span class="muted">
+                ${animal.id}
+            </span>
+
+        </div>
+
+        <h3>
+
+            <span class="swatch"
+                style="background:${phenotype.coatColor.hex}">
+            </span>
+
+            ${escapeHTML(animal.name)}
+
+        </h3>
+
+        <p>
+
+            ${breed.name} · 成年 ·
+
+            第${animal.pedigree.generation}代
+
+        </p>
+
+        <p class="muted">
+
+            父母：
+
+            ${animal.pedigree.motherId ?? "未知"} /
+
+            ${animal.pedigree.fatherId ?? "未知"}
+
+        </p>
+
+        <div class="table-wrap">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>位点</th>
+
+                        <th>等位基因1</th>
+
+                        <th>等位基因2</th>
+
+                        <th>表现</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    ${Object.entries(APPEARANCE_LOCI)
+
+                        .map(([locus, label]) => {
+
+                            let display =
+                                phenotype[locus].name;
+
+                            if (locus === "pattern") {
+
+                                display =
+                                    phenotype.displayPattern;
+
+                            }
+
+                            if (
+
+                                locus === "patternColor" &&
+
+                                !phenotype.patternVisible
+
+                            ) {
+
+                                display = "隐藏";
+
+                            }
+
+                            return `
+
+                                <tr>
+
+                                    <td>${label}</td>
+
+                                    ${animal.genotype[locus]
+
+                                        .map((allele, index) => `
+
+                                            <td>
+
+                                                <select
+                                                    data-side="${side}"
+                                                    data-locus="${locus}"
+                                                    data-index="${index}">
+
+                                                    ${alleleOptions(
+                                                        animal,
+                                                        locus,
+                                                        allele.allele
+                                                    )}
+
+                                                </select>
+
+                                            </td>
+
+                                        `).join("")}
+
+                                    <td>${display}</td>
+
+                                </tr>
+
+                            `;
+
+                        }).join("")}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <p class="muted">
+            D表示显性等级，数值越小越显性；
+            ★表示专属突变色。
+        </p>
+
+        <details open>
+
+            <summary>
+
+                个体值：${calculateTotal(animal.iv)}/60
+
+            </summary>
+
+            <div class="summary-grid">
+
+                ${STAT_KEYS.map(key => `
+
+                    <label>
+
+                        ${STAT_NAMES[key]}
+
+                        <input type="number"
+                            min="0"
+                            max="10"
+                            step="1"
+                            value="${animal.iv[key]}"
+                            data-side="${side}"
+                            data-iv="${key}">
+
+                    </label>
+
+                `).join("")}
+
+            </div>
+
+        </details>
+
+        <div class="row" style="margin-top:16px">
+
+            <label>
+
+                性格
+
+                <select data-side="${side}"
+                    data-field="personality">
+
+                    ${Object.entries(PERSONALITIES)
+
+                        .map(([id, p]) => `
+
+                            <option value="${id}"
+                                ${animal.personality === id
+                                    ? "selected" : ""}>
+
+                                ${p.name}
+
+                            </option>
+
+                        `).join("")}
+
+                </select>
+
+            </label>
+
+            <label>
+
+                体重遗传值
+
+                <input type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="${animal.weightGene}"
+                    data-side="${side}"
+                    data-field="weightGene">
+
+            </label>
+
+        </div>
+
+        <p>
+
+            成年体重：
+
+            ${calculateAdultWeight(animal).toFixed(2)} kg
+
+        </p>
+
+    `;
+
+}
+
+
+function renderEligibility() {
+
+    const eligibility =
+        checkBreedingPair(
+            mother,
+            father,
+            records
+        );
+
+    $("eligibility").innerHTML = `
+
+        <p class="${eligibility.success
+            ? "success" : "error"}">
+
+            ${eligibility.success
+                ? "✓ 当前组合允许繁育"
+                : escapeHTML(
+                    eligibility.reasons.join("；")
+                )}
+
+        </p>
+
+        <div class="summary-grid">
+
+            ${metric(
+                "后代犬种",
+                getBreed(mother.breedId).name
+            )}
+
+            ${metric(
+                "突变触发概率",
+                pct(getMutationRate(mother, father))
+            )}
+
+            ${metric(
+                "近交系数",
+                eligibility.inbreedingCoefficient === null
+                    ? "—"
+                    : pct(eligibility.inbreedingCoefficient)
+            )}
+
+            ${metric(
+                "IV惩罚",
+                eligibility.inbreedingPenalty === null
+                    ? "—"
+                    : pct(eligibility.inbreedingPenalty)
+            )}
+
+        </div>
+
+        ${eligibility.warnings.map(warning => `
+
+            <p class="warning">
+
+                ${escapeHTML(warning)}
+
+            </p>
+
+        `).join("")}
+
+    `;
+
+    document.querySelectorAll("[data-count]")
+
+        .forEach(button => {
+
+            button.disabled =
+                busy || !eligibility.success;
+
+        });
+
+}
+
+
+function renderParents() {
+
+    $("mother-panel").innerHTML =
+        renderParent(mother, "mother");
+
+    $("father-panel").innerHTML =
+        renderParent(father, "father");
+
+    renderEligibility();
+
+}
+
+
+// 处理手动基因编辑
+
+document.addEventListener("change", event => {
+
+    const input = event.target;
+
+    const side = input.dataset.side;
+
+    if (!side || busy) return;
+
+    const animal =
+        side === "mother" ? mother : father;
+
+    const locus = input.dataset.locus;
+
+    if (locus) {
+
+        const index =
+            Number(input.dataset.index);
+
+        const gene =
+            getGene(locus, input.value);
+
+        const old = animal.genotype[locus][index];
+
+        // 未改变的突变基因保留原始来源
+
+        if (old.allele !== input.value) {
+
+            animal.genotype[locus][index] =
+
+                createAllele(
+
+                    input.value,
+
+                    gene.mutationOnly === true,
+
+                    gene.mutationOnly
+
+                        ? animal.id
+
+                        : null
+
+                );
+
+        }
+
+    } else if (input.dataset.iv) {
+
+        const value = Number(input.value);
+
+        if (
+
+            input.value === "" ||
+
+            !Number.isInteger(value) ||
+
+            value < 0 ||
+
+            value > 10
+
+        ) {
+
+            renderParents();
+
+            setStatus("IV必须为0～10的整数。", true);
+
+            return;
+
+        }
+
+        animal.iv[input.dataset.iv] = value;
+
+    } else if (
+
+        input.dataset.field === "personality"
+
+    ) {
+
+        animal.personality = input.value;
+
+    } else if (
+
+        input.dataset.field === "weightGene"
+
+    ) {
+
+        const value = Number(input.value);
+
+        if (
+
+            input.value === "" ||
+
+            !Number.isInteger(value) ||
+
+            value < 0 ||
+
+            value > 100
+
+        ) {
+
+            renderParents();
+
+            setStatus(
+
+                "体重遗传值必须为0～100的整数。",
+
+                true
+
+            );
+
+            return;
+
+        }
+
+        animal.weightGene = value;
+
+    }
+
+    saveRecord(animal);
+
+    clearResult();
+
+    renderParents();
+
+    setStatus("亲本参数已修改，可重新运行模拟。");
+
+});
+
+
+// ==================================================
+// 4. 统计界面
+// ==================================================
+
+function metric(label, value) {
+
+    return `
+
+        <div class="metric">
+
+            <span class="muted">${escapeHTML(label)}</span>
+
+            <strong>${escapeHTML(value)}</strong>
+
+        </div>
+
+    `;
+
+}
+
+
+function distribution(counter, denominator, labelFn = x => x) {
+
+    const entries = Object.entries(counter)
+
+        .sort((a, b) => b[1] - a[1]);
+
+    if (!entries.length) {
+
+        return '<p class="muted">暂无数据</p>';
+
+    }
+
+    return entries.map(([key, count]) => {
+
+        const ratio = denominator
+
+            ? count / denominator
+
+            : 0;
+
+        return `
+
+            <div class="distribution">
+
+                <div class="row between">
+
+                    <span>${escapeHTML(labelFn(key))}</span>
+
+                    <span>
+
+                        ${count}只 · ${pct(ratio)}
+
+                    </span>
+
+                </div>
+
+                <div class="track">
+
+                    <div class="fill"
+                        style="width:${Math.min(100, ratio * 100)}%">
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        `;
+
+    }).join("");
+
+}
+
+
+function renderResults() {
+
+    if (!result) return;
+
+    const s = result.statistics;
+
+    const n = s.total;
+
+    $("results").innerHTML = `
+
+        <section class="panel">
+
+            <h2>模拟总览</h2>
+
+            <div class="summary-grid">
+
+                ${metric("后代数量", n)}
+
+                ${metric("平均IV", s.iv.average.toFixed(2))}
+
+                ${metric("最低IV", s.iv.min)}
+
+                ${metric("最高IV", s.iv.max)}
+
+                ${metric("满IV后代", s.iv.perfectCount)}
+
+                ${metric(
+                    "平均近交IV损失",
+                    s.inbreeding.averageIVLoss.toFixed(2)
+                )}
+
+                ${metric(
+                    "平均成年体重",
+                    s.weight.average.toFixed(2) + " kg"
+                )}
+
+                ${metric(
+                    "突变触发率",
+                    pct(s.mutation.triggered / n)
+                )}
+
+                ${metric(
+                    "新突变产生率",
+                    pct(s.mutation.newMutation / n)
+                )}
+
+                ${metric(
+                    "突变携带率",
+                    pct(s.mutation.carriers / n)
+                )}
+
+                ${metric(
+                    "可见突变率",
+                    pct(s.mutation.visible / n)
+                )}
+
+                ${metric(
+                    "隐藏突变率",
+                    pct(s.mutation.hidden / n)
+                )}
+
+            </div>
+
+            <p class="muted">
+
+                引擎运行耗时：
+
+                ${(result.elapsedMilliseconds / 1000).toFixed(2)} 秒
+
+            </p>
+
+        </section>
+
+        <div class="grid">
+
+            ${Object.entries(s.appearance)
+
+                .map(([locus, counter]) => `
+
+                    <section class="panel">
+
+                        <h3>${APPEARANCE_LOCI[locus]}分布</h3>
+
+                        ${distribution(counter, n)}
+
+                        <details>
+
+                            <summary>查看基因型分布</summary>
+
+                            ${distribution(
+                                s.genotype[locus], n
+                            )}
+
+                        </details>
+
+                    </section>
+
+                `).join("")}
+
+            <section class="panel">
+
+                <h3>个体值总和分布</h3>
+
+                ${distribution(s.iv.histogram, n)}
+
+            </section>
+
+            <section class="panel">
+
+                <h3>各项平均个体值</h3>
+
+                ${STAT_KEYS.map(key => `
+
+                    <div class="distribution">
+
+                        <div class="row between">
+
+                            ${STAT_NAMES[key]}
+
+                            <strong>
+
+                                ${s.iv.averages[key].toFixed(2)}
+
+                            </strong>
+
+                        </div>
+
+                        <div class="track">
+
+                            <div class="fill"
+                                style="width:${s.iv.averages[key] * 10}%">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                `).join("")}
+
+            </section>
+
+            <section class="panel">
+
+                <h3>性别分布</h3>
+
+                ${distribution(
+
+                    s.sex,
+
+                    n,
+
+                    key => key === "female"
+                        ? "母犬" : "公犬"
+
+                )}
+
+                <h3>性格分布</h3>
+
+                ${distribution(
+
+                    s.personality,
+
+                    n,
+
+                    key => PERSONALITIES[key].name
+
+                )}
+
+            </section>
+
+            <section class="panel">
+
+                <h3>新突变位点分布</h3>
+
+                ${distribution(
+
+                    s.mutation.loci,
+
+                    s.mutation.newMutation,
+
+                    key => APPEARANCE_LOCI[key]
+
+                )}
+
+                <h3>突变颜色携带率</h3>
+
+                ${distribution(
+
+                    s.mutation.carriersByColor,
+
+                    n
+
+                )}
+
+                <p class="muted">
+
+                    同一只后代可以携带多种突变颜色，
+                    因此各颜色携带率之和可能超过100%。
+
+                </p>
+
+            </section>
+
+        </div>
+
+        <section class="panel">
+
+            <h2>后代筛选与下一代繁育</h2>
+
+            <div class="row">
+
+                <select id="child-filter">
+
+                    <option value="all">全部后代</option>
+
+                    <option value="female">仅母犬</option>
+
+                    <option value="male">仅公犬</option>
+
+                    <option value="carrier">突变携带者</option>
+
+                    <option value="visible">可见突变</option>
+
+                    <option value="new">新突变</option>
+
+                    <option value="high">IV至少45</option>
+
+                </select>
+
+                <select id="child-sort">
+
+                    <option value="original">生成顺序</option>
+
+                    <option value="iv">IV从高到低</option>
+
+                </select>
+
+                <span id="child-count" class="muted"></span>
+
+            </div>
+
+            <p class="muted">
+
+                列表每次最多显示100只。
+                通过筛选和排序选择后代；
+                完整数据可导出CSV。
+                选中的后代将直接成长为成年犬，
+                用于下一轮实验。
+
+            </p>
+
+            <div id="child-list" class="table-wrap"></div>
+
+        </section>
+
+    `;
+
+    $("child-filter").addEventListener(
+
+        "change", renderChildren
+
+    );
+
+    $("child-sort").addEventListener(
+
+        "change", renderChildren
+
+    );
+
+    renderChildren();
+
+}
+
+
+// ==================================================
+// 5. 后代列表
+// ==================================================
+
+function renderChildren() {
+
+    if (!result) return;
+
+    const filter = $("child-filter").value;
+
+    const sort = $("child-sort").value;
+
+    let children = result.offspring.filter(child => {
+
+        switch (filter) {
+
+            case "female":
+            case "male":
+
+                return child.sex === filter;
+
+            case "carrier":
+
+                return hasMutation(child.genotype);
+
+            case "visible":
+
+                return hasVisibleMutation(
+
+                    calculatePhenotype(child.genotype)
+
+                );
+
+            case "new":
+
+                return child.mutationInfo.occurred;
+
+            case "high":
+
+                return calculateTotal(child.iv) >= 45;
+
+            default:
+
+                return true;
+
+        }
+
+    });
+
+    if (sort === "iv") {
+
+        children.sort((a, b) =>
+
+            calculateTotal(b.iv) -
+
+            calculateTotal(a.iv)
+
+        );
+
+    }
+
+    $("child-count").textContent =
+
+        `符合条件：${children.length}只`;
+
+    $("child-list").innerHTML = `
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>编号/名称</th>
+
+                    <th>性别</th>
+
+                    <th>毛色</th>
+
+                    <th>花纹</th>
+
+                    <th>瞳色</th>
+
+                    <th>IV</th>
+
+                    <th>突变</th>
+
+                    <th>操作</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                ${children.slice(0, 100)
+
+                    .map(child => {
+
+                        const p = calculatePhenotype(
+
+                            child.genotype
+
+                        );
+
+                        const mutation =
+
+                            hasVisibleMutation(p)
+
+                                ? "可见"
+
+                                : hasMutation(child.genotype)
+
+                                    ? "携带"
+
+                                    : "无";
+
+                        return `
+
+                            <tr>
+
+                                <td>
+
+                                    ${escapeHTML(child.name)}
+
+                                    <div class="muted">
+
+                                        ${child.id}
+
+                                    </div>
+
+                                </td>
+
+                                <td>
+
+                                    ${child.sex === "female"
+                                        ? "♀" : "♂"}
+
+                                </td>
+
+                                <td>
+
+                                    <span class="swatch"
+                                        style="background:${p.coatColor.hex}">
+                                    </span>
+
+                                    ${p.coatColor.name}
+
+                                </td>
+
+                                <td>${p.displayPattern}</td>
+
+                                <td>
+
+                                    <span class="swatch"
+                                        style="background:${p.eyeColor.hex}">
+                                    </span>
+
+                                    ${p.eyeColor.name}
+
+                                </td>
+
+                                <td>${calculateTotal(child.iv)}</td>
+
+                                <td>${mutation}</td>
+
+                                <td>
+
+                                    <button class="secondary"
+                                        data-promote="${child.id}">
+
+                                        设为${child.sex === "female"
+                                            ? "母犬" : "公犬"}
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+
+                        `;
+
+                    }).join("")}
+
+            </tbody>
+
+        </table>
+
+    `;
+
+}
+
+
+// ==================================================
+// 6. 多代繁育
+// ==================================================
+
+function promoteChild(id) {
+
+    if (!result || busy) return;
+
+    const data = result.offspring.find(
+
+        child => child.id === id
+
+    );
+
+    if (!data) return;
+
+    const animal = createAnimal({
+
+        ...data,
+
+        stage: "adult",
+
+        location: "nursery"
+
+    });
+
+    saveRecord(animal);
+
+    if (animal.sex === "female") {
+
+        mother = animal;
+
+        $("mother-breed").value =
+            animal.breedId;
+
+    } else {
+
+        father = animal;
+
+        $("father-breed").value =
+            animal.breedId;
+
+    }
+
+    // 保留本批后代列表，允许再选择另一只
+    // 后代替换另一方亲本，进行同胞繁育。
+
+    renderParents();
+
+    setStatus(
+
+        `${animal.name}已设为下一轮繁育亲本。` +
+
+        "旧模拟结果仍可导出或继续选取亲本。"
+
+    );
+
+}
+
+
+// ==================================================
+// 7. 执行模拟
+// ==================================================
+
+async function runSimulation(count) {
+
+    if (busy) return;
+
+    busy = true;
+
+    const controls = [
+
+        ...document.querySelectorAll(
+
+            "button, select, input"
+
+        )
+
+    ];
+
+    const oldStates = controls.map(
+
+        control => control.disabled
+
+    );
+
+    controls.forEach(
+
+        control => control.disabled = true
+
+    );
+
+    setStatus(`正在计算${count}只后代……`);
+
+    // 允许浏览器先显示状态文字
+
+    await new Promise(
+
+        resolve => setTimeout(resolve, 20)
+
+    );
+
+    try {
+
+        saveRecord(mother);
+
+        saveRecord(father);
+
+        result = simulateBreeding(
+
+            mother,
+
+            father,
+
+            records,
+
+            {
+
+                count,
+
+                idPrefix: "BATCH_" + (++batchNumber)
+
+            }
+
+        );
+
+        renderResults();
+
+        setStatus(
+
+            `模拟完成：共${result.count}只后代。`
+
+        );
+
+    } catch (error) {
+
+        setStatus(error.message, true);
+
+        console.error(error);
+
+    } finally {
+
+        busy = false;
+
+        controls.forEach((control, index) => {
+
+            control.disabled = oldStates[index];
+
+        });
+
+        renderEligibility();
+
+        $("export-csv").disabled = !result;
+
+    }
+
+}
+
+
+// ==================================================
+// 8. 导出CSV
+// ==================================================
+
+function exportCSV() {
+
+    if (!result) return;
+
+    const csv =
+        offspringToCSV(result.offspring);
+
+    const blob = new Blob(
+
+        [csv],
+
+        { type: "text/csv;charset=utf-8;" }
+
+    );
+
+    const url =
+        URL.createObjectURL(blob);
+
+    const link =
+        document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+
+        `breeding-lab-${Date.now()}.csv`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    setTimeout(
+
+        () => URL.revokeObjectURL(url),
+
+        1000
+
+    );
+
+}
+
+
+// ==================================================
+// 9. 按钮事件
+// ==================================================
+
+document.addEventListener("click", event => {
+
+    const button =
+        event.target.closest("button");
+
+    if (!button || button.disabled || busy) {
+
+        return;
+
+    }
+
+    if (button.dataset.count) {
+
+        runSimulation(
+
+            Number(button.dataset.count)
+
+        );
+
+    }
+
+    if (button.dataset.promote) {
+
+        promoteChild(button.dataset.promote);
+
+    }
+
+});
+
+
+$("reset-parents").addEventListener(
+
+    "click", resetParents
+
+);
+
+$("export-csv").addEventListener(
+
+    "click", exportCSV
+
+);
+
+
+// ==================================================
+// 10. 初始化
+// ==================================================
+
+const breedOptions = getAllBreeds()
+
+    .map(breed => `
+
+        <option value="${breed.id}">
+
+            ${breed.name}
+
+        </option>
+
+    `).join("");
+
+
+$("mother-breed").innerHTML =
+    breedOptions;
+
+$("father-breed").innerHTML =
+    breedOptions;
+
+$("mother-breed").value = "corgi";
+
+$("father-breed").value = "corgi";
+
+resetParents();
+
+</script>
+
+</body>
+</html>

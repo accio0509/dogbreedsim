@@ -1,0 +1,32 @@
+import {createGameState} from '../storage/state.js';
+import {createSaveStore,SAVE_KEY} from '../storage/save.js';
+import {createAnimal} from '../engine/animal.js';
+import {createFormalBreeding} from '../engine/formalBreeding.js';
+import {applyDevAction,advanceTestTime,commitDevState,DEV_SAVE_KEY,HOUR,blankDevState} from '../engine/devTools.js';
+import {getAllBreeds} from '../data/species/dog/breeds.js';
+import {renderAnimalCard,renderAnimalDetail} from '../ui/animalView.js';
+import {getRemainingCooldown} from '../engine/breeding.js';
+import {isEggReady} from '../engine/egg.js';
+export function runDevChecks(breedId=getAllBreeds()[0].id){
+ const results=[],T=1700000000000;
+ const test=(name,fn)=>{try{if(!fn())throw Error('结果不符');results.push({name,success:true});}catch(e){results.push({name,success:false,message:e.message});}};
+ const fresh=(stage='puppy')=>{const s=createGameState();s.initialized=true;s.nextAnimalId=3;for(const [id,sex] of [['DOG00001','female'],['DOG00002','male']]){const a=createAnimal({id,breedId,sex,stage});a.personality='calm';a.timestamps.lastGrowthAt=T;a.breeding={count:0,lastSuccessAt:null};s.activeAnimals[id]=a;s.pedigreeRecords[id]=structuredClone(a);}return s;};
+ const act=(s,a,o={})=>applyDevAction(s,a,{now:T,...o});
+ const eggSetup=()=>{const s=fresh('adult');const b=createFormalBreeding({state:s,persist:()=>true,now:()=>T});const r=b.breed('DOG00001','DOG00002');if(!r.success)throw Error(r.message);return {s,e:s.incubationTasks[0]};};
+ const memory=()=>{const m=new Map();return{getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)};};
+ test('快进12小时增加360经验',()=>{const s=fresh();act(s,'advance',{hours:12});return s.activeAnimals.DOG00001.exp===360&&s.activeAnimals.DOG00001.timestamps.lastGrowthAt===T;});
+ test('7天快进跨越48小时上限并成年',()=>{const s=fresh();act(s,'advance',{hours:168});return Object.values(s.activeAnimals).every(a=>a.stage==='adult'&&a.exp===720);});
+ test('快进不使电脑盒子及忙碌犬只成长',()=>{const s=fresh();s.activeAnimals.DOG00001.location='computer';s.activeAnimals.DOG00002.activity='test';act(s,'advance',{hours:168});return Object.values(s.activeAnimals).every(a=>a.exp===0);});
+ test('连续快进正确累计',()=>{const s=fresh();act(s,'advance',{hours:24});act(s,'advance',{hours:48});return s.activeAnimals.DOG00001.exp===720;});
+ test('快进同步孵化和冷却，不改遗传数据',()=>{const {s,e}=eggSetup(),g=JSON.stringify(e.offspringData);act(s,'advance',{hours:24});return isEggReady(e,T)&&getRemainingCooldown(s.activeAnimals.DOG00001,T)===0&&JSON.stringify(e.offspringData)===g&&s.activeAnimals.DOG00001.breeding.count===1;});
+ test('立即孵化不直接领取，不改蛋时长',()=>{const {s,e}=eggSetup(),duration=e.hatchAt-e.createdAt;act(s,'hatch');return isEggReady(e,T)&&s.incubationTasks.length===1&&e.hatchAt-e.createdAt===duration&&Object.keys(s.activeAnimals).length===2;});
+ test('解除冷却不恢复次数',()=>{const {s}=eggSetup();act(s,'cooldown');return s.activeAnimals.DOG00001.breeding.count===1&&getRemainingCooldown(s.activeAnimals.DOG00001,T)===0;});
+ test('恢复次数同时解除冷却',()=>{const {s}=eggSetup();act(s,'counts');return s.activeAnimals.DOG00001.breeding.count===0&&getRemainingCooldown(s.activeAnimals.DOG00001,T)===0;});
+ test('生成测试犬自动编号并登记家谱',()=>{const s=fresh();act(s,'pair',{breedId});return s.activeAnimals.DOG00003.sex==='female'&&s.activeAnimals.DOG00004.sex==='male'&&s.pedigreeRecords.DOG00004.id==='DOG00004'&&s.nextAnimalId===5;});
+ test('生成犬只遵循容量及等待安置',()=>{const s=fresh();s.facilities.nursery.capacity=2;s.facilities.computer.capacity=1;act(s,'pair',{breedId});return s.activeAnimals.DOG00003.location==='computer'&&s.activeAnimals.DOG00004.location==='pending';});
+ test('写入失败不改变当前测试状态',()=>{const s=fresh(),before=JSON.stringify(s);try{commitDevState(s,()=>false,d=>{act(d,'adult');return d;});}catch{return JSON.stringify(s)===before;}return false;});
+ test('正式与测试存档隔离及测试重置',()=>{const disk=memory(),normal=createSaveStore(disk,SAVE_KEY),dev=createSaveStore(disk,DEV_SAVE_KEY),s=fresh();normal.save(s);const old=disk.getItem(SAVE_KEY);commitDevState(s,d=>dev.save(d),d=>{act(d,'adult');return d;});commitDevState(s,d=>dev.save(d),blankDevState);return disk.getItem(SAVE_KEY)===old&&normal.load().initialized&&dev.load().initialized===false;});
+ test('经验值卡片及详情均向下取整且不改原数据',()=>{const s=fresh(),a=s.activeAnimals.DOG00001;a.exp=123.987;return [renderAnimalCard(a),renderAnimalDetail(a)].every(v=>v.includes('123 / 240 EXP')&&!v.includes('123.987'))&&a.exp===123.987;});
+ test('无效导入不覆盖测试存档',()=>{const s=fresh();let saved=false;try{commitDevState(s,()=>{saved=true;},()=>({version:'bad'}));}catch{return !saved&&s.initialized;}return false;});
+ return results;
+}

@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>V0.3.0 繁育资格与近交测试</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: auto;
+            max-width: 1000px;
+            padding: 30px;
+            background: #f3f5f2;
+            color: #303a32;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        section {
+            background: white;
+            border: 1px solid #dce3dc;
+            border-radius: 8px;
+            padding: 18px;
+            margin: 12px 0;
+        }
+
+        h3 {
+            margin-top: 0;
+        }
+
+        .pass {
+            color: #38764c;
+        }
+
+        .fail {
+            color: #b94a48;
+        }
+
+        .muted {
+            color: #778178;
+        }
+
+        button {
+            padding: 12px 20px;
+            background: #52765b;
+            color: white;
+            border: 0;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.8;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<h1>V0.3.0 繁育资格与近交测试</h1>
+
+<p class="muted">
+    验证完整家谱、近交系数、个体值惩罚、
+    繁育冷却及终生次数限制。
+</p>
+
+<button id="run">重新运行全部测试</button>
+
+<h2 id="summary">准备测试……</h2>
+
+<div id="results"></div>
+
+<script type="module">
+
+import {
+    createAnimal
+} from "../engine/animal.js";
+
+import {
+    TIME
+} from "../engine/time.js";
+
+import {
+    createKinshipCalculator,
+    calculateInbreedingCoefficient,
+    getInbreedingPenalty,
+    applyInbreedingPenalty
+} from "../engine/kinship.js";
+
+import {
+    getBreedingHistory,
+    getRemainingBreedings,
+    getRemainingCooldown,
+    checkIndividualBreeding,
+    checkSizeCompatibility,
+    checkBreedingPair,
+    recordSuccessfulBreeding,
+    formatCooldown
+} from "../engine/breeding.js";
+
+import {
+    generateOffspringData,
+    createOffspringFromData
+} from "../engine/offspring.js";
+
+
+// ==========================================
+// 测试工具
+// ==========================================
+
+const NOW = 1800000000000;
+
+const DAY = 24 * TIME.HOUR;
+
+const results =
+    document.getElementById("results");
+
+let passed = 0;
+
+let failed = 0;
+
+
+function assert(condition, message) {
+
+    if (!condition) {
+        throw new Error(message);
+    }
+
+}
+
+
+function near(actual, expected) {
+
+    assert(
+
+        Math.abs(actual - expected) < 0.000000001,
+
+        `实际 ${actual}，预期 ${expected}`
+
+    );
+
+}
+
+
+function equal(a, b) {
+
+    return JSON.stringify(a) ===
+        JSON.stringify(b);
+
+}
+
+
+function expectError(fn) {
+
+    let rejected = false;
+
+    try {
+
+        fn();
+
+    } catch {
+
+        rejected = true;
+
+    }
+
+    assert(rejected, "非法数据未被拒绝。");
+
+}
+
+
+function pct(value) {
+
+    return (value * 100).toFixed(2) + "%";
+
+}
+
+
+function test(title, fn) {
+
+    const panel =
+        document.createElement("section");
+
+    const heading =
+        document.createElement("h3");
+
+    const content =
+        document.createElement("pre");
+
+    try {
+
+        const detail = fn();
+
+        heading.className = "pass";
+
+        heading.textContent = "✓ " + title;
+
+        content.textContent = detail ?? "通过";
+
+        passed++;
+
+    } catch (error) {
+
+        heading.className = "fail";
+
+        heading.textContent = "✗ " + title;
+
+        content.textContent =
+            error.stack ?? error.message;
+
+        failed++;
+
+        console.error(title, error);
+
+    }
+
+    panel.append(heading, content);
+
+    results.appendChild(panel);
+
+}
+
+
+// ==========================================
+// 创建测试犬只
+// ==========================================
+
+function dog(
+    id,
+    sex,
+    breedId = "corgi",
+    mother = null,
+    father = null
+) {
+
+    return createAnimal({
+
+        id,
+
+        breedId,
+
+        sex,
+
+        stage: "adult",
+
+        pedigree: {
+
+            motherId: mother?.id ?? null,
+
+            fatherId: father?.id ?? null,
+
+            generation: Math.max(
+
+                mother?.pedigree.generation ?? 0,
+
+                father?.pedigree.generation ?? 0
+
+            ) + 1
+
+        }
+
+    });
+
+}
+
+
+// ==========================================
+// 创建家谱
+// ==========================================
+
+function family() {
+
+    const A = dog("A", "female");
+
+    const B = dog("B", "male");
+
+    const C = dog(
+        "C", "female", "corgi", A, B
+    );
+
+    const D = dog(
+        "D", "male", "corgi", A, B
+    );
+
+    const E = dog("E", "female");
+
+    const H = dog("H", "male");
+
+    // B与E的后代，与C是半同胞
+
+    const G = dog(
+        "G", "male", "corgi", E, B
+    );
+
+    // C与无关犬H的后代
+
+    const I = dog(
+        "I", "female", "corgi", C, H
+    );
+
+    // D与无关犬E的后代
+
+    const J = dog(
+        "J", "male", "corgi", E, D
+    );
+
+    // C与父亲B回交产生的后代
+
+    const K = dog(
+        "K", "female", "corgi", C, B
+    );
+
+    const records = Object.fromEntries(
+
+        [A, B, C, D, E, H, G, I, J, K]
+
+            .map(animal => [
+
+                animal.id,
+
+                structuredClone(animal)
+
+            ])
+
+    );
+
+    return {
+
+        A, B, C, D, E, H, G, I, J, K,
+
+        records
+
+    };
+
+}
+
+
+// ==========================================
+// 01 无亲缘关系
+// ==========================================
+
+function testUnrelated() {
+
+    const { A, B, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        A, B, records
+
+    );
+
+    near(f, 0);
+
+    return `无亲缘关系：${pct(f)}`;
+
+}
+
+
+// ==========================================
+// 02 全同胞
+// ==========================================
+
+function testFullSiblings() {
+
+    const { C, D, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        C, D, records
+
+    );
+
+    near(f, 0.25);
+
+    return `全同胞后代：${pct(f)}`;
+
+}
+
+
+// ==========================================
+// 03 半同胞
+// ==========================================
+
+function testHalfSiblings() {
+
+    const { C, G, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        C, G, records
+
+    );
+
+    near(f, 0.125);
+
+    return `半同胞后代：${pct(f)}`;
+
+}
+
+
+// ==========================================
+// 04 亲子回交
+// ==========================================
+
+function testParentOffspring() {
+
+    const { C, B, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        C, B, records
+
+    );
+
+    near(f, 0.25);
+
+    return `父女回交：${pct(f)}`;
+
+}
+
+
+// ==========================================
+// 05 祖孙回交
+// ==========================================
+
+function testGrandparent() {
+
+    const { I, B, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        I, B, records
+
+    );
+
+    near(f, 0.125);
+
+    return `祖孙回交：${pct(f)}`;
+
+}
+
+
+// ==========================================
+// 06 堂亲或表亲
+// ==========================================
+
+function testCousins() {
+
+    const { I, J, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        I, J, records
+
+    );
+
+    near(f, 0.0625);
+
+    near(getInbreedingPenalty(f), 0);
+
+    return `表亲后代：${pct(f)}，无IV惩罚。`;
+
+}
+
+
+// ==========================================
+// 07 连续近亲回交
+// ==========================================
+
+function testRepeatedBackcross() {
+
+    const { K, B, records } = family();
+
+    const f = calculateInbreedingCoefficient(
+
+        K, B, records
+
+    );
+
+    near(f, 0.375);
+
+    near(
+        getInbreedingPenalty(f),
+        0.20
+    );
+
+    return `连续两次亲子回交：${pct(f)}`;
+
+}
+
+
+// ==========================================
+// 08 祖先自身近交
+// ==========================================
+
+function testAncestorInbreeding() {
+
+    const { K, H, records } = family();
+
+    const calculator =
+        createKinshipCalculator(records);
+
+    near(
+
+        calculator.getInbreeding("K"),
+
+        0.25
+
+    );
+
+    near(
+
+        calculator.getKinship("K", "K"),
+
+        0.625
+
+    );
+
+    // K虽自身近交，但与H无亲缘关系
+
+    near(
+
+        calculateInbreedingCoefficient(
+
+            K, H, records
+
+        ),
+
+        0
+
+    );
+
+    return "祖先自身近交与无关亲本配种计算正确。";
+
+}
+
+
+// ==========================================
+// 09 超过三代的共同祖先
+// ==========================================
+
+function testDeepPedigree() {
+
+    const A = dog("DA", "female");
+
+    const B = dog("DB", "male");
+
+    const records = {
+
+        DA: A,
+
+        DB: B
+
+    };
+
+    let descendant = dog(
+
+        "D1", "female", "corgi", A, B
+
+    );
+
+    records.D1 = descendant;
+
+    for (let i = 2; i <= 6; i++) {
+
+        const unrelated = dog(
+
+            "U" + i,
+
+            "male"
+
+        );
+
+        records[unrelated.id] =
+            unrelated;
+
+        descendant = dog(
+
+            "D" + i,
+
+            "female",
+
+            "corgi",
+
+            descendant,
+
+            unrelated
+
+        );
+
+        records[descendant.id] =
+            descendant;
+
+    }
+
+    const f = calculateInbreedingCoefficient(
+
+        descendant,
+
+        B,
+
+        records
+
+    );
+
+    near(f, 1 / 128);
+
+    return (
+
+        "六代祖先仍可追溯，F = " +
+
+        pct(f)
+
+    );
+
+}
+
+
+// ==========================================
+// 10 退役祖先仍参与计算
+// ==========================================
+
+function testRetiredAncestor() {
+
+    const { C, D, records } = family();
+
+    records.A.retired = true;
+
+    records.A.location = "retired";
+
+    records.B.retired = true;
+
+    records.B.location = "retired";
+
+    // 模拟永久血统档案删除养成数据
+
+    delete records.A.exp;
+
+    delete records.A.ev;
+
+    delete records.A.activity;
+
+    delete records.B.exp;
+
+    delete records.B.ev;
+
+    delete records.B.activity;
+
+    near(
+
+        calculateInbreedingCoefficient(
+
+            C, D, records
+
+        ),
+
+        0.25
+
+    );
+
+    return "退役不会破坏家谱计算。";
+
+}
+
+
+// ==========================================
+// 11 近交分级边界
+// ==========================================
+
+function testPenaltyBoundaries() {
+
+    const cases = [
+
+        [0, 0],
+
+        [0.0625, 0],
+
+        [0.0625001, 0.05],
+
+        [0.125, 0.05],
+
+        [0.1250001, 0.10],
+
+        [0.25, 0.10],
+
+        [0.2500001, 0.20],
+
+        [1, 0.20]
+
+    ];
+
+    for (const [f, penalty] of cases) {
+
+        near(
+            getInbreedingPenalty(f),
+            penalty
+        );
+
+    }
+
+    return cases.map(
+
+        ([f, p]) =>
+
+            `F=${f * 100}%：惩罚 ${pct(p)}`
+
+    ).join("\n");
+
+}
+
+
+// ==========================================
+// 12 个体值向下取整
+// ==========================================
+
+function testIVPenalty() {
+
+    const iv = {
+
+        STR: 9,
+
+        SPD: 10,
+
+        STA: 5,
+
+        AGI: 7,
+
+        INT: 8,
+
+        PER: 3
+
+    };
+
+    const before =
+        JSON.stringify(iv);
+
+    const result =
+        applyInbreedingPenalty(
+
+            iv,
+
+            0.25
+
+        );
+
+    const expected = {
+
+        STR: 8,
+
+        SPD: 9,
+
+        STA: 4,
+
+        AGI: 6,
+
+        INT: 7,
+
+        PER: 2
+
+    };
+
+    assert(
+
+        equal(result.iv, expected),
+
+        "个体值惩罚或取整错误。"
+
+    );
+
+    assert(
+
+        result.totalLoss === 6,
+
+        "总损失错误。"
+
+    );
+
+    assert(
+
+        JSON.stringify(iv) === before,
+
+        "修改了原始个体值。"
+
+    );
+
+    const zero = {
+
+        STR: 0, SPD: 0, STA: 0,
+
+        AGI: 0, INT: 0, PER: 0
+
+    };
+
+    assert(
+
+        equal(
+
+            applyInbreedingPenalty(
+                zero, 1
+            ).iv,
+
+            zero
+
+        ),
+
+        "零个体值惩罚后出现负值。"
+
+    );
+
+    return "逐项向下取整正常，总损失6点。";
+
+}
+
+
+// ==========================================
+// 13 缺失祖先及循环家谱
+// ==========================================
+
+function testInvalidPedigree() {
+
+    const { C, D, records } = family();
+
+    const missing =
+        structuredClone(records);
+
+    delete missing.A;
+
+    expectError(() =>
+
+        calculateInbreedingCoefficient(
+
+            C, D, missing
+
+        )
+
+    );
+
+    const cyclic =
+        structuredClone(records);
+
+    cyclic.A.pedigree.motherId = "C";
+
+    expectError(() =>
+
+        calculateInbreedingCoefficient(
+
+            C, D, cyclic
+
+        )
+
+    );
+
+    expectError(() =>
+
+        getInbreedingPenalty(-0.1)
+
+    );
+
+    expectError(() =>
+
+        getInbreedingPenalty(1.1)
+
+    );
+
+    return "缺失祖先、循环家谱和非法F均被拒绝。";
+
+}
+
+
+// ==========================================
+// 14 基础繁育资格
+// ==========================================
+
+function testBasicEligibility() {
+
+    const A = dog("A", "female");
+
+    const B = dog("B", "male");
+
+    assert(
+
+        checkBreedingPair(
+            A, B, {}, NOW
+        ).success,
+
+        "正常成年犬不能繁育。"
+
+    );
+
+    assert(
+
+        !checkBreedingPair(
+            B, A, {}, NOW
+        ).success,
+
+        "性别顺序错误未拦截。"
+
+    );
+
+    assert(
+
+        !checkBreedingPair(
+            A, A, {}, NOW
+        ).success,
+
+        "同一亲本未拦截。"
+
+    );
+
+    A.location = "computer";
+
+    assert(
+
+        checkBreedingPair(
+            A, B, {}, NOW
+        ).success,
+
+        "电脑盒子成年犬不能参与繁育。"
+
+    );
+
+    return "成年、性别和设施位置校验正常。";
+
+}
+
+
+// ==========================================
+// 15 未成年犬限制
+// ==========================================
+
+function testAgeRestriction() {
+
+    const A = dog("A", "female");
+
+    for (const stage of [
+
+        "egg",
+
+        "puppy",
+
+        "juvenile"
+
+    ]) {
+
+        A.stage = stage;
+
+        assert(
+
+            !checkIndividualBreeding(
+                A, NOW
+            ).success,
+
+            `${stage} 可以繁育。`
+
+        );
+
+    }
+
+    A.stage = "adult";
+
+    assert(
+
+        checkIndividualBreeding(
+            A, NOW
+        ).success,
+
+        "成年犬被错误限制。"
+
+    );
+
+    return "只有成年犬可以参与繁育。";
+
+}
+
+
+// ==========================================
+// 16 活动及退役限制
+// ==========================================
+
+function testActivityRestriction() {
+
+    const A = dog("A", "female");
+
+    for (const type of [
+
+        "exploration",
+
+        "training",
+
+        "competition",
+
+        "breeding"
+
+    ]) {
+
+        A.activity = { type };
+
+        assert(
+
+            !checkIndividualBreeding(
+                A, NOW
+            ).success,
+
+            "活动中的犬只可以繁育。"
+
+        );
+
+    }
+
+    A.activity = null;
+
+    A.retired = true;
+
+    assert(
+
+        !checkIndividualBreeding(
+            A, NOW
+        ).success,
+
+        "退役犬只可以繁育。"
+
+    );
+
+    return "活动互斥与退役限制正常。";
+
+}
+
+
+// ==========================================
+// 17 全部体型组合
+// ==========================================
+
+function testSizeRestriction() {
+
+    const breeds = [
+
+        "chihuahua",
+
+        "corgi",
+
+        "golden_retriever",
+
+        "saint_bernard"
+
+    ];
+
+    let allowed = 0;
+
+    let rejected = 0;
+
+    for (let m = 0; m < 4; m++) {
+
+        for (let f = 0; f < 4; f++) {
+
+            const mother = dog(
+
+                "M" + m,
+
+                "female",
+
+                breeds[m]
+
+            );
+
+            const father = dog(
+
+                "F" + f,
+
+                "male",
+
+                breeds[f]
+
+            );
+
+            const result =
+                checkSizeCompatibility(
+
+                    mother,
+
+                    father
+
+                );
+
+            assert(
+
+                result.success === (f <= m),
+
+                "体型限制错误。"
+
+            );
+
+            if (result.success) {
+
+                allowed++;
+
+            } else {
+
+                rejected++;
+
+            }
+
+        }
+
+    }
+
+    assert(
+        allowed === 10 &&
+        rejected === 6,
+        "体型组合数量错误。"
+    );
+
+    return "16种组合：允许10种，禁止6种。";
+
+}
+
+
+// ==========================================
+// 18 初始繁育记录
+// ==========================================
+
+function testInitialHistory() {
+
+    const A = dog("A", "female");
+
+    const history =
+        getBreedingHistory(A);
+
+    assert(
+        history.count === 0,
+        "初始次数错误。"
+    );
+
+    assert(
+        history.lastSuccessAt === null,
+        "初始繁育时间错误。"
+    );
+
+    assert(
+        getRemainingBreedings(A) === 10,
+        "初始剩余次数错误。"
+    );
+
+    assert(
+        getRemainingCooldown(A, NOW) === 0,
+        "初始犬只存在冷却。"
+    );
+
+    assert(
+        A.breeding === undefined,
+        "只读检查修改了犬只。"
+    );
+
+    return "初始次数为0，剩余10次，无冷却。";
+
+}
+
+
+// ==========================================
+// 19 繁育成功与冷却边界
+// ==========================================
+
+function testCooldown() {
+
+    const A = dog("A", "female");
+
+    const B = dog("B", "male");
+
+    const result =
+        recordSuccessfulBreeding(
+
+            A, B, {}, NOW
+
+        );
+
+    assert(
+        result.success,
+        "产蛋记录失败。"
+    );
+
+    for (const animal of [A, B]) {
+
+        assert(
+            animal.breeding.count === 1,
+            "次数未增加。"
+        );
+
+        assert(
+            animal.breeding.lastSuccessAt === NOW,
+            "冷却起算时间错误。"
+        );
+
+        near(
+
+            getRemainingCooldown(
+                animal, NOW
+            ),
+
+            DAY
+
+        );
+
+        near(
+
+            getRemainingCooldown(
+                animal,
+                NOW + DAY - 1
+            ),
+
+            1
+
+        );
+
+        assert(
+
+            !checkIndividualBreeding(
+
+                animal,
+
+                NOW + DAY - 1
+
+            ).success,
+
+            "冷却提前结束。"
+
+        );
+
+        assert(
+
+            checkIndividualBreeding(
+
+                animal,
+
+                NOW + DAY
+
+            ).success,
+
+            "24小时后仍不能繁育。"
+
+        );
+
+    }
+
+    return "双方同步进入24小时冷却，边界正常。";
+
+}
+
+
+// ==========================================
+// 20 终生繁育次数
+// ==========================================
+
+function testLifetimeLimit() {
+
+    const A = dog("A", "female");
+
+    const B = dog("B", "male");
+
+    for (let i = 0; i < 10; i++) {
+
+        const result =
+            recordSuccessfulBreeding(
+
+                A,
+
+                B,
+
+                {},
+
+                NOW + i * DAY
+
+            );
+
+        assert(
+            result.success,
+            `第${i + 1}次繁育失败。`
+        );
+
+    }
+
+    assert(
+        getRemainingBreedings(A) === 0,
+        "母犬次数未耗尽。"
+    );
+
+    assert(
+        getRemainingBreedings(B) === 0,
+        "公犬次数未耗尽。"
+    );
+
+    const result =
+        recordSuccessfulBreeding(
+
+            A,
+
+            B,
+
+            {},
+
+            NOW + 20 * DAY
+
+        );
+
+    assert(
+        !result.success,
+        "允许第11次繁育。"
+    );
+
+    assert(
+        A.breeding.count === 10 &&
+        B.breeding.count === 10,
+        "失败时次数增加。"
+    );
+
+    return "公母终生最多繁育10次。";
+
+}
+
+
+// ==========================================
+// 21 失败不修改任何亲本数据
+// ==========================================
+
+function testFailedBreeding() {
+
+    const A = dog("A", "female");
+
+    const B = dog("B", "male");
+
+    recordSuccessfulBreeding(
+
+        A, B, {}, NOW
+
+    );
+
+    const C = dog("C", "female");
+
+    const before = JSON.stringify(
+
+        [C, B]
+
+    );
+
+    const result =
+        recordSuccessfulBreeding(
+
+            C,
+
+            B,
+
+            {},
+
+            NOW + TIME.HOUR
+
+        );
+
+    assert(
+        !result.success,
+        "冷却期间繁育成功。"
+    );
+
+    assert(
+
+        JSON.stringify([C, B]) === before,
+
+        "失败导致一方数据被修改。"
+
+    );
+
+    return "失败不消耗次数，不刷新冷却。";
+
+}
+
+
+// ==========================================
+// 22 允许近亲繁育并显示警告
+// ==========================================
+
+function testRelatedPair() {
+
+    const { C, D, records } = family();
+
+    const result =
+        checkBreedingPair(
+
+            C, D, records, NOW
+
+        );
+
+    assert(
+        result.success,
+        "近亲繁育被禁止。"
+    );
+
+    near(
+        result.inbreedingCoefficient,
+        0.25
+    );
+
+    near(
+        result.inbreedingPenalty,
+        0.10
+    );
+
+    assert(
+
+        result.warnings.length > 0,
+
+        "缺少近交警告。"
+
+    );
+
+    return result.warnings.join("\n");
+
+}
+
+
+// ==========================================
+// 23 完整近交后代生成
+// ==========================================
+
+function testInbredOffspring() {
+
+    const { C, D, records } = family();
+
+    const parentBefore =
+        JSON.stringify([C, D]);
+
+    for (let i = 0; i < 1000; i++) {
+
+        const data =
+            generateOffspringData(
+
+                C,
+
+                D,
+
+                "CHILD_" + i,
+
+                records
+
+            );
+
+        near(
+
+            data.pedigree
+                .inbreedingCoefficient,
+
+            0.25
+
+        );
+
+        const record =
+            data.inheritance.inbreeding;
+
+        near(record.penalty, 0.10);
+
+        for (
+            const key of
+            Object.keys(data.iv)
+        ) {
+
+            assert(
+
+                data.iv[key] ===
+
+                Math.floor(
+
+                    record.originalIV[key] *
+                    0.90
+
+                ),
+
+                "后代未正确受到近交惩罚。"
+
+            );
+
+        }
+
+        // 模拟保存并重新读取蛋
+
+        const loaded = JSON.parse(
+
+            JSON.stringify(data)
+
+        );
+
+        const child =
+            createOffspringFromData(loaded);
+
+        assert(
+
+            equal(child.iv, data.iv),
+
+            "孵化时再次惩罚个体值。"
+
+        );
+
+        near(
+
+            child.pedigree
+                .inbreedingCoefficient,
+
+            0.25
+
+        );
+
+    }
+
+    assert(
+
+        JSON.stringify([C, D]) === parentBefore,
+
+        "生成后代时修改了亲本。"
+
+    );
+
+    expectError(() =>
+
+        generateOffspringData(
+
+            C, D, "A", records
+
+        )
+
+    );
+
+    return (
+
+        "模拟1000只近交后代，" +
+
+        "惩罚、血统及孵化数据全部正常。"
+
+    );
+
+}
+
+
+// ==========================================
+// 24 冷却时间格式化
+// ==========================================
+
+function testCooldownFormat() {
+
+    assert(
+
+        formatCooldown(DAY) === "24:00:00",
+
+        "24小时显示错误。"
+
+    );
+
+    assert(
+
+        formatCooldown(3661000) === "01:01:01",
+
+        "时分秒显示错误。"
+
+    );
+
+    assert(
+
+        formatCooldown(1) === "00:00:01",
+
+        "毫秒边界显示错误。"
+
+    );
+
+    assert(
+
+        formatCooldown(0) === "可繁育",
+
+        "零冷却显示错误。"
+
+    );
+
+    return "冷却显示格式正常。";
+
+}
+
+
+// ==========================================
+// 运行全部测试
+// ==========================================
+
+function runAllTests() {
+
+    results.innerHTML = "";
+
+    passed = 0;
+
+    failed = 0;
+
+    const start = performance.now();
+
+    const tests = [
+
+        ["01 无亲缘关系", testUnrelated],
+
+        ["02 全同胞", testFullSiblings],
+
+        ["03 半同胞", testHalfSiblings],
+
+        ["04 亲子回交", testParentOffspring],
+
+        ["05 祖孙回交", testGrandparent],
+
+        ["06 堂亲或表亲", testCousins],
+
+        ["07 连续回交", testRepeatedBackcross],
+
+        ["08 祖先自身近交", testAncestorInbreeding],
+
+        ["09 超过三代的祖先", testDeepPedigree],
+
+        ["10 退役祖先", testRetiredAncestor],
+
+        ["11 近交分级边界", testPenaltyBoundaries],
+
+        ["12 IV向下取整", testIVPenalty],
+
+        ["13 非法家谱", testInvalidPedigree],
+
+        ["14 基础繁育资格", testBasicEligibility],
+
+        ["15 未成年限制", testAgeRestriction],
+
+        ["16 活动及退役限制", testActivityRestriction],
+
+        ["17 全部体型组合", testSizeRestriction],
+
+        ["18 初始繁育记录", testInitialHistory],
+
+        ["19 成功产蛋及冷却", testCooldown],
+
+        ["20 终生次数限制", testLifetimeLimit],
+
+        ["21 失败不修改数据", testFailedBreeding],
+
+        ["22 近亲繁育警告", testRelatedPair],
+
+        ["23 完整近交后代", testInbredOffspring],
+
+        ["24 冷却时间显示", testCooldownFormat]
+
+    ];
+
+    for (const [title, fn] of tests) {
+
+        test(title, fn);
+
+    }
+
+    const elapsed = (
+
+        (performance.now() - start) / 1000
+
+    ).toFixed(2);
+
+    const summary =
+        document.getElementById("summary");
+
+    summary.textContent =
+
+        `${passed}/${passed + failed} 项通过` +
+
+        `｜失败 ${failed} 项` +
+
+        `｜耗时 ${elapsed} 秒`;
+
+    summary.className =
+
+        failed === 0 ? "pass" : "fail";
+
+}
+
+
+document.getElementById("run")
+
+    .addEventListener(
+
+        "click",
+
+        runAllTests
+
+    );
+
+
+runAllTests();
+
+</script>
+
+</body>
+
+</html>

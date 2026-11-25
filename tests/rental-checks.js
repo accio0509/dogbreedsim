@@ -1,0 +1,35 @@
+import {createGameState} from '../storage/state.js';
+import {migrateSave} from '../storage/save.js';
+import {createMarketService,rentalPrice,marketPlacement} from '../engine/market.js';
+import {createFormalBreeding} from '../engine/formalBreeding.js';
+import {createAnimal} from '../engine/animal.js';
+import {checkBreedingPair} from '../engine/breeding.js';
+import {applyDevAction} from '../engine/devTools.js';
+export function runRentalChecks(){
+const results=[];
+const assert=Object.assign(v=>{if(!v)throw Error('断言不成立');},{equal(a,b,message){if(a!==b)throw Error(message??`预期 ${b}，实际 ${a}`);},deepEqual(a,b){if(JSON.stringify(a)!==JSON.stringify(b))throw Error('对象不一致');}});
+let t=Date.now();
+const s=createGameState();s.initialized=true;s.money=10000;
+const service=createMarketService({state:s,persist:()=>true,now:()=>t});
+const test=(name,fn)=>{try{fn();results.push({name,success:true});}catch(e){results.push({name,success:false,message:e.message});}};
+const ok=r=>{assert.equal(r.success,true,r.message);return r;};
+const snapshot=()=>JSON.stringify(s);
+test('独立六只成年犬',()=>{ok(service.refresh());assert.equal(s.rentalMarket.listings.length,6);assert(s.rentalMarket.listings.every(l=>l.animal.stage==='adult'));assert(s.market.listings.every(l=>l.id.startsWith('MKT-')));});
+test('同条件公犬严格半价',()=>{for(const l of s.rentalMarket.listings)assert.equal(rentalPrice({...l.animal,sex:'female'}),2*rentalPrice({...l.animal,sex:'male'}));});
+test('同日刷新及存档保持库存',()=>{const before=snapshot();ok(service.refresh());assert.equal(snapshot(),before);assert.deepEqual(migrateSave(s).rentalMarket,s.rentalMarket);});
+const listing=s.rentalMarket.listings[0];let rented;
+test('余额不足无副作用',()=>{const money=s.money;s.money=0;const before=snapshot();assert(!service.buy(listing.id,true).success);assert.equal(snapshot(),before);s.money=money;});
+test('扣款并占用繁育室',()=>{const money=s.money;rented=ok(service.buy(listing.id,true)).animal;assert.equal(s.money,money-listing.price);assert.equal(rented.location,'breeding');assert.equal(rented.source,'rental');assert.equal(marketPlacement(s,true),null);assert.deepEqual(migrateSave(s).activeAnimals[rented.id],rented);});
+test('重复租借和满员均拒绝',()=>{const before=snapshot();assert(!service.buy(listing.id,true).success);assert(!service.buy(s.rentalMarket.listings[1].id,true).success);assert.equal(snapshot(),before);});
+test('跨日刷新不删除已租犬',()=>{const day=s.rentalMarket.day;applyDevAction(s,'advance',{hours:24,now:t});assert(s.rentalMarket.day>day);assert(s.activeAnimals[rented.id]);});
+const own=createAnimal({id:'OWN',breedId:rented.breedId,sex:rented.sex==='female'?'male':'female',stage:'adult'});s.activeAnimals.OWN=own;s.pedigreeRecords.OWN=structuredClone(own);
+const mother=rented.sex==='female'?rented:own,father=rented.sex==='male'?rented:own;
+const breeding=createFormalBreeding({state:s,persist:()=>true,now:()=>t});
+test('禁止两只租借犬相互配种',()=>{assert(!checkBreedingPair({...mother,source:'rental',location:'breeding'},{...father,source:'rental',location:'breeding'},s.pedigreeRecords,t).success);});
+test('繁育保存失败不消耗租借犬',()=>{const before=snapshot();const b=createFormalBreeding({state:s,persist:()=>false,now:()=>t});assert(!b.breed(mother.id,father.id).success);assert.equal(snapshot(),before);});
+let egg;
+test('成功产蛋后归还、释放位置并保存家谱',()=>{egg=ok(breeding.breed(mother.id,father.id)).egg;assert(!s.activeAnimals[rented.id]);assert(s.pedigreeRecords[rented.id].rentalReturnedAt===t);assert.equal(marketPlacement(s,true),'breeding');assert.equal(s.activeAnimals.OWN.breeding.count,1);assert.equal(egg.motherId,mother.id);assert.equal(egg.fatherId,father.id);migrateSave(s);});
+test('后代领取仍保留租借亲本血统',()=>{t+=86400000;const puppy=ok(breeding.claim(egg.id,'测试幼犬')).puppy;assert.equal(puppy.pedigree.motherId,mother.id);assert.equal(puppy.pedigree.fatherId,father.id);assert(s.pedigreeRecords[rented.id]);});
+test('旧存档可迁移',()=>{const old=createGameState();delete old.rentalMarket;assert.deepEqual(migrateSave(old).rentalMarket,{day:null,listings:[]});});
+return results;
+}

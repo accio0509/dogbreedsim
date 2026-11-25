@@ -1,0 +1,48 @@
+import {createGameState} from '../storage/state.js';
+import {migrateSave} from '../storage/save.js';
+import {createAnimal} from '../engine/animal.js';
+import {gameNow,changeSpeed} from '../engine/gameClock.js';
+import {settleGrowth} from '../engine/growth.js';
+import {createTrainingService} from '../engine/training.js';
+import {createExplorationService} from '../engine/exploration.js';
+import {createFormalBreeding} from '../engine/formalBreeding.js';
+import {createMarketService,localMarketDay,marketTime} from '../engine/market.js';
+import {createCompetitionService,COMPETITIONS,COMPETITION_LEVELS,competitionScore} from '../engine/competition.js';
+import {getRemainingCooldown} from '../engine/breeding.js';
+import {advanceTestTime} from '../engine/devTools.js';
+import {dogLabel,filterDogs,emptyFilter,filterMarkup} from '../ui/dogPicker.js';
+import {renderAnimalDetail} from '../ui/animalView.js';
+const H=3600000,T=1700000000000,same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+export function runV080Checks(){const out=[];function test(name,fn){try{out.push({name,success:!!fn()});}catch(e){out.push({name,success:false,message:e.message});}}
+function setup(stage='adult'){const s=createGameState();s.initialized=true;s.nextAnimalId=3;for(const [id,sex,name] of [['A','male','小麦'],['B','female','奶糖']]){const a=createAnimal({id,breedId:'corgi',stage,sex,name});a.personality='calm';a.timestamps.lastGrowthAt=T;a.breeding={count:0,lastSuccessAt:null};s.activeAnimals[id]=a;s.pedigreeRecords[id]=structuredClone(a);}return s;}
+test('自然成长每小时30经验',()=>{const s=setup('puppy');settleGrowth(s,T+H);return s.activeAnimals.A.exp===30;});
+test('8小时青年、24小时成年',()=>{const s=setup('puppy');settleGrowth(s,T+8*H);if(s.activeAnimals.A.stage!=='juvenile')return false;settleGrowth(s,T+24*H);return s.activeAnimals.A.stage==='adult'&&s.activeAnimals.A.exp===720;});
+test('温顺自然成长+20%',()=>{const s=setup('puppy');s.activeAnimals.A.personality='gentle';settleGrowth(s,T+H);return s.activeAnimals.A.exp===36;});
+test('冒险探索经验+20%',()=>{const s=setup('puppy');s.activeAnimals.A.personality='adventurous';const x=createExplorationService({state:s,persist:()=>true,now:()=>T});x.start('park','A');settleGrowth(s,T+H);return Math.abs(s.activeAnimals.A.exp-43.2)<1e-9;});
+test('幸运掉落相对概率提升',()=>{const s=setup('puppy');s.activeAnimals.A.personality='lucky';let i=0;const rng=()=>[0.5,0.55,0.09,0.1][i++%4];const x=createExplorationService({state:s,persist:()=>true,now:()=>T,rng});return x.start('park','A').success&&s.explorationTasks[0].reward.item==='dog_biscuit'&&!!s.explorationTasks[0].reward.puppy;});
+test('倍速切换不追溯',()=>{const s=setup();changeSpeed(s,3,T);const n=gameNow(s,T+H);changeSpeed(s,2,T+H);return n===T+3*H&&gameNow(s,T+H)===n&&gameNow(s,T+2*H)===T+5*H;});
+test('存档恢复继续按倍率',()=>{const s=setup();changeSpeed(s,5,T);return gameNow(migrateSave(s),T+H)===T+5*H;});
+test('非法倍率拒绝',()=>{const s=setup();try{changeSpeed(s,4,T);}catch{return s.gameClock===null;}return false;});
+test('训练按游戏时间结算',()=>{const s=setup();changeSpeed(s,2,T);let real=T;const x=createTrainingService({state:s,persist:()=>true,now:()=>gameNow(s,real)});x.start('A','STR');real+=H-1; if(x.claim('A').success)return false;real+=1;return x.claim('A').gain===10;});
+test('孵化及冷却按游戏时间结算',()=>{const s=setup();changeSpeed(s,3,T);let real=T;const x=createFormalBreeding({state:s,persist:()=>true,now:()=>gameNow(s,real)});if(!x.breed('B','A').success)return false;real+=8*H;return getRemainingCooldown(s.activeAnimals.A,gameNow(s,real))===0&&x.claim(s.incubationTasks[0].id,'').success;});
+test('正式训练、探索及比赛服务默认使用全局游戏时钟',()=>{const s=setup(),real=Date.now();changeSpeed(s,3,real-10*H);const expected=gameNow(s,real);const x=createTrainingService({state:s,persist:()=>true});if(!x.start('A','STR').success||Math.abs(s.trainingTasks[0].startedAt-expected)>1000)return false;const y=createExplorationService({state:s,persist:()=>true});if(!y.start('park','B').success||Math.abs(s.explorationTasks[0].startedAt-expected)>1000)return false;const d=setup();changeSpeed(d,3,real-10*H);const z=createCompetitionService({state:d,persist:()=>true});return z.start('A','sprint').success&&Math.abs(d.competitionTasks[0].startedAt-expected)<1000;});
+test('正式繁育服务默认使用全局游戏时钟',()=>{const s=setup(),real=Date.now();changeSpeed(s,2,real-10*H);const x=createFormalBreeding({state:s,persist:()=>true}),r=x.breed('B','A');return r.success&&Math.abs(r.egg.createdAt-gameNow(s,real))<1000;});
+test('市场现实日期不受倍速影响',()=>{const s=setup();changeSpeed(s,10,T);return localMarketDay(marketTime(s,T+H))===localMarketDay(T+H)&&gameNow(s,T+H)===T+10*H;});
+test('倍速下购买犬只的成长时间正确',()=>{const s=setup();changeSpeed(s,3,T);let real=T+H;const x=createMarketService({state:s,persist:()=>true,now:()=>real});x.refresh();s.money=10000;const r=x.buy(s.market.listings[0].id);return r.success&&r.animal.timestamps.lastGrowthAt===gameNow(s,real);});
+test('七种比赛均可参赛',()=>COMPETITIONS.every(c=>{const s=setup();return createCompetitionService({state:s,persist:()=>true,now:()=>T}).start('A',c.id).success;}));
+test('租借及忙碌犬不能参赛',()=>{const s=setup(),x=createCompetitionService({state:s,persist:()=>true,now:()=>T});Object.assign(s.activeAnimals.A,{stage:'adult',exp:720,source:'rental'});if(x.start('A','sprint').success)return false;Object.assign(s.activeAnimals.A,{source:'starter',activity:'training'});return !x.start('A','sprint').success;});
+test('幼犬、青年犬、成年犬分别按年龄组参赛',()=>['puppy','juvenile','adult'].every(stage=>{const s=setup(stage),x=createCompetitionService({state:s,persist:()=>true,now:()=>T});return x.start('A','sprint').success&&s.competitionTasks[0].stage===stage;}));
+test('初级默认开放，中高级须解锁',()=>COMPETITION_LEVELS.every((l,i)=>{const s=setup(),x=createCompetitionService({state:s,persist:()=>true,now:()=>T});return x.start('A','allround',l.id).success===(i===0);}));
+test('不同等级奖金正确',()=>{const s=setup(),x=createCompetitionService({state:s,persist:()=>true,now:()=>T,rng:()=>0});for(const levelId of ['beginner','intermediate'])s.competitionRecords.push({animalId:'A',eventId:'sprint',levelId,stage:'adult',startedAt:T-2*H,endsAt:T-H,claimedAt:T-H,score:150,rank:1,money:180,name:s.activeAnimals.A.name});return x.start('A','sprint','advanced').success&&s.competitionTasks[0].money===[45,30,20,10,5,3][s.competitionTasks[0].rank-1]*2;});
+test('训练提高比赛基础评分',()=>{const s=setup(),a=s.activeAnimals.A,c=COMPETITIONS[0],before=competitionScore(a,c);a.ev.SPD=100;return competitionScore(a,c)>before;});
+test('赛果锁定、提前领取拒绝、正常奖金只发一次',()=>{const s=setup();let at=T;const x=createCompetitionService({state:s,persist:()=>true,now:()=>at,rng:()=>0});x.start('A','sprint');const task=structuredClone(s.competitionTasks[0]),money=s.money;if(x.claim('A').success||!same(task,migrateSave(s).competitionTasks[0]))return false;at+=H;return x.claim('A').success&&s.money===money+task.money&&!x.claim('A').success&&s.competitionRecords.length===1&&s.activeAnimals.A.activity===null;});
+test('好胜奖金+10%',()=>{const s=setup();s.activeAnimals.A.personality='competitive';const x=createCompetitionService({state:s,persist:()=>true,now:()=>T,rng:()=>0});x.start('A','sprint');const t=s.competitionTasks[0];return t.money===Math.floor([45,30,20,10,5,3][t.rank-1]*1.1+1e-8);});
+test('参赛犬不能训练或探索',()=>{const s=setup();createCompetitionService({state:s,persist:()=>true,now:()=>T}).start('A','sprint');return !createTrainingService({state:s,persist:()=>true,now:()=>T}).start('A','STR').success&&!createExplorationService({state:s,persist:()=>true,now:()=>T}).start('park','A').success;});
+test('比赛操作保存失败回滚',()=>{const s=setup(),b=structuredClone(s);return !createCompetitionService({state:s,persist:()=>false,now:()=>T}).start('A','sprint').success&&same(s,b);});
+test('开发快进同步比赛',()=>{const s=setup(),x=createCompetitionService({state:s,persist:()=>true,now:()=>T});x.start('A','sprint');advanceTestTime(s,4,T);return x.claim('A').success;});
+test('选择标签包含名称性别犬种年龄且不显示编号',()=>{const s=setup(),a=s.activeAnimals.A;return dogLabel(a)==='小麦 · ♂ 公 · 柯基犬 · 成年犬';});
+test('多条件筛选与空结果',()=>{const s=setup(),dogs=Object.values(s.activeAnimals);return filterDogs(dogs,{...emptyFilter(),name:'奶',sex:'female',breed:'corgi',stage:'adult',personality:'calm'})[0]?.id==='B'&&filterDogs(dogs,{...emptyFilter(),name:'不存在'}).length===0;});
+test('筛选输入防止HTML注入',()=>filterMarkup({...emptyFilter(),name:'"><script>'}).includes('&lt;script&gt;'));
+test('详情含快捷入口，预览不含派遣',()=>{const a=setup().activeAnimals.A;return renderAnimalDetail(a).includes('data-action="dispatch-animal"')&&!renderAnimalDetail(a,{readOnly:true}).includes('data-action="dispatch-animal"');});
+test('旧0.7存档补齐比赛及倍速字段',()=>{const s=setup();s.version='0.7.0';delete s.gameClock;delete s.competitionTasks;const d=migrateSave(s);return d.version==='1.0.0'&&d.gameClock===null&&d.competitionTasks.length===0&&same(s.activeAnimals,d.activeAnimals);});
+return out;}

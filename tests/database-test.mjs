@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {getAllBreeds,getBreedAppearance,SIZE_CLASSES} from '../data/species/dog/breeds.js';
+import {APPEARANCE_GENES,getGene} from '../data/species/dog/appearance.js';
+import {generateGenotype,validateGenotype,inheritGenotype,calculatePhenotype} from '../engine/genetics.js';
+import {applyMutation,getMutationCandidates} from '../engine/mutation.js';
+import {migrateSave} from '../storage/save.js';
+import {createGameState} from '../storage/state.js';
+import {createAnimal} from '../engine/animal.js';
+import {generateMarket} from '../engine/market.js';
+const breeds=getAllBreeds(), loci=Object.keys(APPEARANCE_GENES);assert.equal(breeds.length,24);assert.equal(Object.values(APPEARANCE_GENES).flatMap(Object.keys).length,41);
+for(const size of Object.keys(SIZE_CLASSES))assert.equal(breeds.filter(b=>b.size===size).length,6);
+let generated=0,children=0;
+for(const b of breeds){assert.equal(Object.values(b.baseStats).reduce((a,v)=>a+v,0),450);const pools=getBreedAppearance(b.id);for(const l of loci){const p=pools[l];assert(p.normal.length);assert.equal(new Set([...p.normal,...p.rare]).size,p.normal.length+p.rare.length);for(const id of [...p.normal,...p.rare])assert(getGene(l,id)&&!getGene(l,id).mutationOnly);if(p.mutation)assert.deepEqual(new Set(getMutationCandidates(b.id,l)),new Set(Object.keys(APPEARANCE_GENES[l]).filter(id=>![...p.normal,...p.rare].includes(id))));else assert.equal(getMutationCandidates(b.id,l).length,0);}
+for(const source of ['starter','market','exploration'])for(let i=0;i<100;i++){const g=generateGenotype(b.id,source);validateGenotype(g);calculatePhenotype(g);for(const l of loci)for(const a of g[l])assert([...pools[l].normal,...pools[l].rare].includes(a.allele)&&!a.mutated);generated++;}
+for(const f of breeds.filter(f=>SIZE_CLASSES[f.size].rank<=SIZE_CLASSES[b.size].rank)){let mother={breedId:b.id,sex:'female',genotype:generateGenotype(b.id)},father={breedId:f.id,sex:'male',genotype:generateGenotype(f.id)};for(let i=0;i<20;i++){const g=inheritGenotype(mother,father),m=applyMutation(g,b.id,'test-'+children,1);validateGenotype(m.genotype);calculatePhenotype(m.genotype);for(const l of loci)for(const a of m.genotype[l])assert(a.mutated?!!pools[l].mutation:[...pools[l].normal,...pools[l].rare].includes(a.allele));mother={...mother,genotype:m.genotype};children++;}}}
+const s=createGameState();const a=createAnimal({id:'A',breedId:'chihuahua'});const old={coatColor:'C001',pattern:'P004',patternColor:'M005',eyeColor:'E001',hairLength:'L002'};for(const [l,id] of Object.entries(old))a.genotype[l]=Array.from({length:2},()=>({allele:id,mutated:false,mutationOrigin:null}));s.activeAnimals.A=a;s.pedigreeRecords.A=structuredClone(a);s.rentalMarket=generateMarket('2026-11-25',Date.now(),true);s.rentalMarket.listings[0].animal.genotype=structuredClone(a.genotype);const originalPrice=s.rentalMarket.listings[0].price;const migrated=migrateSave(s);assert.equal(migrated.activeAnimals.A.genotype.coatColor[0].allele,'C07');assert.equal(migrated.activeAnimals.A.genotype.hairLength[0].allele,'L3');assert.equal(migrated.pedigreeRecords.A.genotype.pattern[0].allele,'P0');assert.equal(migrated.rentalMarket.listings[0].price,originalPrice);assert.deepEqual(migrateSave(migrated),migrated);assert.equal(s.activeAnimals.A.genotype.coatColor[0].allele,'C001');
+console.log(`数据库校验通过：24犬种、41基因、${generated}次随机生成、${children}次连续跨代遗传及突变；旧编号及租借价格迁移通过。`);

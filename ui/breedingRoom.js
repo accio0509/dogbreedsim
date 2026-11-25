@@ -1,0 +1,139 @@
+import {predictLocus} from '../engine/management.js';
+import {APPEARANCE_LOCI} from '../data/species/dog/appearance.js';
+import {getMutationRate} from '../engine/mutation.js';
+import {dogLabel,emptyFilter,filterDogs,filterMarkup,handleFilterChange,handleFilterClick,enhancePicker} from './dogPicker.js';
+import { getBreed } from '../data/species/dog/breeds.js';
+import { checkBreedingPair, getRemainingBreedings, getRemainingCooldown } from '../engine/breeding.js';
+import { startBreeding, INCUBATION_HOURS } from '../engine/egg.js';
+
+const stages = {puppy:'幼犬', youth:'青年犬', juvenile:'青年犬', adult:'成年犬'};
+function breedName(id) {
+    const breed = getBreed(id);
+    return breed?.nameZh ?? breed?.nameCN ?? breed?.name ?? id;
+}
+function node(tag, text, className) {
+    const el = document.createElement(tag);
+    if (text !== undefined) el.textContent = text;
+    if (className) el.className = className;
+    return el;
+}
+function messages(value) {
+    return (Array.isArray(value) ? value : value ? [value] : []).map(v => typeof v === 'string' ? v : v.message ?? v.reason ?? JSON.stringify(v));
+}
+function uniqueIds(animals, eggs, records) {
+    const used = new Set([...animals.map(a=>a.id), ...eggs.flatMap(e=>[e.id,e.offspringId]), ...Object.keys(records)]);
+    const next = prefix => {
+        let id;
+        do { id = prefix + crypto.randomUUID(); } while (used.has(id));
+        used.add(id);
+        return id;
+    };
+    return {eggId:next('EGG-'),offspringId:next('DOG-')};
+}
+
+// animals, eggs and pedigreeRecords must be the same live objects used by the game.
+// onChange is a notification, not a persistence transaction (added later).
+export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, onChange = ()=>{}, now = ()=>Date.now(), makeIds = uniqueIds, executeBreeding = startBreeding, getCapacity = null,preselected = ''}) {
+    if (!root || !Array.isArray(animals) || !Array.isArray(eggs)) throw new Error('繁育室需要容器、犬只列表与犬蛋列表');
+    let motherId = animals.find(a=>a.id===preselected&&a.sex==='female')?.id??'', fatherId = animals.find(a=>a.id===preselected&&a.sex==='male')?.id??'', busy = false, disposed = false;
+    const wrap = node('section', undefined, 'br-room');
+    const style = node('style', `
+    .br-room{max-width:780px;margin:auto;font:15px/1.6 system-ui,sans-serif;color:inherit}
+    .br-room *{box-sizing:border-box}.br-room h2,.br-room h3{margin:0 0 12px}
+    .br-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+    .br-panel{border:1px solid #aaa6;border-radius:12px;padding:16px;margin:12px 0}
+    .br-room select,.br-room button{font:inherit;padding:10px;border-radius:8px;border:1px solid #aaa9;width:100%;background:transparent;color:inherit}
+    .br-room button{cursor:pointer;background:#48785b;color:white;border:0;font-weight:600}
+    .br-room button:disabled{opacity:.45;cursor:not-allowed}.br-info{white-space:pre-line;margin:12px 0 0}
+    .br-good{color:#287b47}.br-bad{color:#b34840}.br-muted{opacity:.75}
+    .br-preview p{margin:6px 0}.br-room [role=status]{min-height:26px;margin:10px 0}
+    `);
+    wrap.append(style,node('h2','繁育室'),node('p','选择一只成年雄犬与一只成年雌犬。','br-muted'));
+    const grid = node('div',undefined,'br-grid');
+    function parentPanel(title, sex) {
+        const panel = node('div',undefined,'br-panel');
+        const label = node('label',title);
+        const select = node('select');
+        select.setAttribute('aria-label',title);
+        const info = node('div',undefined,'br-info');
+        const filters=emptyFilter(), filterBox=node('div');filterBox.innerHTML=filterMarkup(filters,{fixedSex:true});filterBox.addEventListener('change',ev=>handleFilterChange(ev,filters,refresh));filterBox.addEventListener('click',ev=>handleFilterClick(ev,filters,()=>{filterBox.innerHTML=filterMarkup(filters,{fixedSex:true});refresh();}));label.append(select); panel.append(filterBox,label,info); grid.append(panel);
+        select.addEventListener('change',()=>{if(sex==='female') motherId=select.value; else fatherId=select.value; refresh();});
+        return {select,info,sex,filters};
+    }
+    const fatherPanel = parentPanel('♂ 父本','male');
+    const motherPanel = parentPanel('♀ 母本','female');
+    const preview = node('div',undefined,'br-panel br-preview');
+    const status = node('p'); status.setAttribute('role','status');
+    const button = node('button','确认繁育'); button.type='button';
+    const count = node('p',undefined,'br-muted');
+    wrap.append(grid,preview,button,status,count); root.replaceChildren(wrap);
+
+    const find = id => animals.find(a=>String(a.id)===id);
+    function populate(panel, chosenId, time) {
+        const select=panel.select;
+        const entries = filterDogs(animals.filter(a=>a.sex===panel.sex),panel.filters);
+        // Keep ineligible dogs visible, so the player can inspect why they cannot breed.
+        const options = [new Option('请选择犬只',''), ...entries.map(a=>new Option(dogLabel(a),String(a.id)))];
+        const signature=JSON.stringify(options.map(o=>[o.value,o.text]));
+        if(select.dataset.signature!==signature){select.replaceChildren(...options);select.dataset.signature=signature;}
+        select.value=chosenId;
+        enhancePicker(select,entries);
+        const dog=find(select.value);
+        if (!dog) {panel.info.textContent='未选择';return '';}
+        const remaining=getRemainingCooldown(dog,time);
+        const cooldownText=remaining>0 ? `${Math.floor(Math.ceil(remaining/60000)/60)}小时${Math.ceil(remaining/60000)%60}分钟` : '已就绪';
+        panel.info.textContent=[`犬种：${breedName(dog.breedId)}`,`阶段：${stages[dog.stage] || dog.stage}`,`剩余繁育次数：${dog.source==='rental'?1:getRemainingBreedings(dog)}`,`冷却：${cooldownText}`,`状态：${dog.retired?'已退役':dog.activity?'活动中':'空闲'}`,`位置：${dog.location==='nursery'?'饲育屋':dog.location==='computer'?'电脑盒子':dog.location==='breeding'?'繁育室（租借）':dog.location}`].join('\n');
+        return select.value;
+    }
+    function refresh() {
+        if(disposed) return;
+        const time=now();
+        motherId=populate(motherPanel,motherId,time);
+        fatherId=populate(fatherPanel,fatherId,time);
+        const mother=find(motherId), father=find(fatherId);
+        preview.replaceChildren(node('h3','繁育预览'));
+        const capacity=getCapacity?.();
+        count.textContent=`孵化列表：${eggs.length}${capacity!=null?` / ${capacity}`:""} 枚犬蛋`;
+        button.disabled=true;
+        if(!mother || !father){preview.append(node('p','请选择完整的父母本。','br-muted'));return;}
+        try {
+            const result=checkBreedingPair(mother,father,pedigreeRecords,time);
+            const f=result.inbreedingCoefficient;
+            preview.append(node('p',`后代犬种：${breedName(mother.breedId)}`),node('p',mother.source==='rental'||father.source==='rental'?'租借费已支付，成功产蛋后租借犬离场':'繁育费用：免费'),node('p',`孵化时间：${INCUBATION_HOURS} 游戏小时`),node('p',`近交系数：${typeof f==='number'?(f*100).toFixed(2)+'%':'未返回'}`));
+            // Render the engine's value without assuming it is a percentage or multiplier.
+            preview.append(node('p','近交按实际家谱计算，不受犬种限制。'),node('p',`新突变基础概率：${(Math.min(1,getMutationRate(mother,father)*(mother.mutationPollen||father.mutationPollen?2:1))*100).toFixed(0)}%${mother.mutationPollen||father.mutationPollen?"（突变花粉生效）":""}`),node('h4','遗传预测（新突变前，各位点独立显性概率）'));
+            for(const [l,name] of Object.entries(APPEARANCE_LOCI))preview.append(node('p',`${name}：${predictLocus(mother,father,l).map(x=>`${x.name} ${(x.p*100).toFixed(1)}%`).join(' / ')}`));
+            preview.append(node('p','花纹及花纹颜色为位点显性概率，实际显示还受纯色及同色遮蔽影响。','br-muted'));
+            const penalty=result.inbreedingPenalty;
+            const penaltyText=typeof f==='number' ? (f<=0.0625?'无':f<=0.125?'−5%':f<=0.25?'−10%':'−20%') : '未返回';
+            preview.append(node('p',`个体值惩罚（按近交规则）：${penaltyText}`));
+            if(penalty!==undefined && typeof f!=='number') preview.append(node('p',`引擎惩罚值：${typeof penalty==='object'?JSON.stringify(penalty):penalty}`));
+            for(const reason of messages(result.reasons)) preview.append(node('p',reason,'br-bad'));
+            for(const warning of messages(result.warnings)) preview.append(node('p',warning,'br-muted'));
+            preview.append(node('p',result.success?'满足繁育条件':'暂不满足繁育条件',result.success?'br-good':'br-bad'));
+            const full=capacity!=null && eggs.length>=capacity;
+            if(full) preview.append(node("p","孵化室已满，请先领取幼犬。","br-bad"));
+            button.disabled=busy || !result.success || full;
+        }catch(error){preview.append(node('p',`检查失败：${error.message}`,'br-bad'));}
+    }
+    button.addEventListener('click',()=>{
+        if(busy || disposed) return;
+        const mother=find(motherId),father=find(fatherId);
+        if(!mother || !father) return;
+        if(!window.confirm(`确定让 ${father.name || father.id} 与 ${mother.name || mother.id} 繁育？成功后双方进入24小时冷却。`)) return;
+        busy=true; button.disabled=true;
+        try {
+            const ids=makeIds(animals,eggs,pedigreeRecords);
+            const result=executeBreeding({mother,father,...ids,eggs,pedigreeRecords,now:now()});
+            status.textContent=result.message || (result.success?'繁育成功':'繁育失败');
+            status.className=result.success?'br-good':'br-bad';
+            if(result.success) {
+                try {onChange(result);} catch(error) {status.textContent+=`；界面更新失败：${error.message}`;}
+            }
+        } catch(error) {status.textContent=`繁育操作异常：${error.message}`;status.className='br-bad';}
+        finally {busy=false;refresh();}
+    });
+    refresh();
+    const timer=setInterval(()=>{if(!busy) refresh();},1000);
+    return {refresh,destroy(){disposed=true;clearInterval(timer);wrap.remove();}};
+}

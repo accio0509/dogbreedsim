@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>V0.4.0 最终验收</title><style>body{font:15px/1.6 system-ui,sans-serif;background:#f7f7f4;color:#26362c;margin:20px}main{max-width:850px;margin:auto}section{border:1px solid #d5dbd4;border-radius:12px;background:white;padding:16px;margin:16px 0}button,select{font:inherit;padding:8px;margin:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.bad{color:#a33131}.good{color:#267744}</style></head><body><main>
+<h1>V0.4.0 最终验收</h1><p>独立验收存档：不读取、修改正式存档。模拟正式字段映射及多代繁育。</p>
+<section><label>犬种 <select id="breed"></select></label><button id="reset">重建验收存档</button><button id="run">运行最终自动测试</button><button id="regression">运行第五阶段回归测试</button><div id="results" role="status"></div></section>
+<section><button id="advance">推进24小时</button><button id="upgrade">孵化位增加1（仅测试）</button><button id="reload">刷新并恢复</button><p id="clock"></p><p id="status" role="status"></p></section>
+<section id="breeding"></section><section id="incubation"></section><section><h2>犬只列表</h2><div id="dogs"></div><details><summary>完整家谱</summary><pre id="pedigree"></pre></details></section></main>
+<script type="module">
+import {getAllBreeds} from '../data/species/dog/breeds.js';
+import {createAnimal} from '../engine/animal.js';
+import {mountBreedingFeature} from '../ui/breedingFeature.js';
+import {runReleaseChecks} from './release-checks.js';
+import {runLifecycleChecks} from './lifecycle-checks.js';
+const $=s=>document.querySelector(s),KEY='dogbreedsim:v040:stage6:isolated-test:v1',DAY=86400000;
+let state,feature;
+const status=(s,bad=false)=>{$('#status').textContent=s;$('#status').className=bad?'bad':'good';};
+const persist=d=>{localStorage.setItem(KEY,JSON.stringify(d));return true;};
+const now=()=>Date.now()+(state?.offsetMs??0);
+function clock(){if(state)$('#clock').textContent=`测试时间：${new Date(now()).toLocaleString()} · 孵化位 ${state.facilities.incubation}/5 · 犬蛋 ${state.eggs?.length??0}`;}
+function refresh(){feature?.refresh();clock();$('#dogs').replaceChildren();for(const dog of state.activeAnimals){const p=document.createElement('p');p.textContent=`${dog.name} · ${dog.sex} · ${dog.stage} · ${dog.location} · ${dog.id}`;$('#dogs').append(p);}$('#pedigree').textContent=JSON.stringify(state.pedigreeRecords,null,2);}
+function mount(){feature?.destroy();feature=mountBreedingFeature({state,persist,breedRoot:$('#breeding'),incubationRoot:$('#incubation'),getCapacity:s=>({nursery:10,computer:60,incubation:s.facilities.incubation}),now,onChange:r=>{status(r.message);refresh();}});refresh();}
+function reset(){const breedId=$('#breed').value;if(!breedId)throw Error('请选择犬种');const activeAnimals=[['M1','小麦','male'],['F1','栗子','female'],['M2','奶油','male'],['F2','团子','female']].map(([id,name,sex])=>createAnimal({id,name,sex,breedId,stage:'adult',location:'nursery'}));const candidate={version:'0.3.0',breedId,offsetMs:0,money:1234,facilities:{incubation:1},activeAnimals,pedigreeRecords:Object.fromEntries(activeAnimals.map(a=>[a.id,structuredClone(a)])),breedingTasks:[],incubationTasks:[]};persist(candidate);state=candidate;mount();status('测试存档已重建');}
+function run(fn){const out=$('#results');out.replaceChildren();try{const list=fn($('#breed').value);for(const item of list){const p=document.createElement('p');p.className=item.success?'good':'bad';p.textContent=`${item.success?'✓':'✗'} ${item.name}${item.message?'：'+item.message:''}`;out.append(p);}const total=document.createElement('strong');total.textContent=`${list.filter(x=>x.success).length} 项通过，${list.filter(x=>!x.success).length} 项失败`;out.append(total);}catch(e){out.textContent='测试初始化失败：'+e.message;}}
+function updateTest(key,value){try{const candidate=structuredClone(state);if(key==='offset')candidate.offsetMs=value;else candidate.facilities.incubation=value;persist(candidate);if(key==='offset')state.offsetMs=value;else state.facilities.incubation=value;refresh();}catch(e){status(e.message,true);}}
+$('#run').onclick=()=>run(runReleaseChecks);$('#regression').onclick=()=>run(runLifecycleChecks);$('#reset').onclick=()=>{if(confirm('仅重建第六阶段验收存档？'))try{reset();}catch(e){status(e.message,true);}};$('#advance').onclick=()=>state&&updateTest('offset',state.offsetMs+DAY);$('#upgrade').onclick=()=>state&&updateTest('capacity',Math.min(5,state.facilities.incubation+1));$('#reload').onclick=()=>location.reload();
+try{const raw=getAllBreeds();const entries=Array.isArray(raw)?raw.map(b=>[typeof b==='string'?b:b.id??b.breedId,b]):Object.entries(raw);for(const [key,b] of entries){const id=typeof b==='string'?b:b.id??b.breedId??key;if(id)$('#breed').add(new Option(typeof b==='string'?b:b.nameZh??b.nameCN??b.name??id,id));}const saved=localStorage.getItem(KEY);if(saved){state=JSON.parse(saved);if(!Number.isFinite(state.offsetMs)||!state.facilities)throw Error('测试存档异常');$('#breed').value=state.breedId;mount();status('已恢复验收存档');}else reset();}catch(e){status('初始化失败：'+e.message,true);}
+setInterval(clock,1000);
+</script></body></html>

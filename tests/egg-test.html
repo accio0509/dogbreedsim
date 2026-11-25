@@ -1,0 +1,356 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>V0.4.0 犬蛋系统测试</title>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 24px;
+            background: #f5f5f5;
+        }
+
+        #results, #eggData {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            line-height: 1.8;
+        }
+
+        .pass { color: #27834b; }
+        .fail { color: #c0392b; }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        input, button {
+            padding: 8px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>V0.4.0 犬蛋系统测试</h1>
+
+    <input id="breedId"
+           placeholder="输入已有犬种breedId">
+
+    <button id="run">运行测试</button>
+
+    <div id="results"></div>
+
+    <h2>生成的犬蛋数据</h2>
+
+    <pre id="eggData"></pre>
+
+    <script type="module">
+
+        import {
+            createAnimal
+        } from "../engine/animal.js";
+
+        import {
+            getRemainingBreedings,
+            getRemainingCooldown
+        } from "../engine/breeding.js";
+
+        import {
+            INCUBATION_MS,
+            startBreeding,
+            getRemainingIncubation,
+            getIncubationProgress,
+            isEggReady,
+            getEggStatus
+        } from "../engine/egg.js";
+
+        const HOUR = 60 * 60 * 1000;
+        const DAY = 24 * HOUR;
+
+        const results = document.querySelector("#results");
+        const eggData = document.querySelector("#eggData");
+
+        document.querySelector("#run")
+            .addEventListener("click", runTests);
+
+        function runTests() {
+
+            results.innerHTML = "";
+            eggData.textContent = "";
+
+            let passed = 0;
+            let failed = 0;
+
+            function test(name, fn) {
+
+                const row = document.createElement("div");
+
+                try {
+
+                    if (!fn()) {
+                        throw new Error("结果不符合预期");
+                    }
+
+                    row.className = "pass";
+                    row.textContent = "✓ " + name;
+                    passed++;
+
+                } catch (error) {
+
+                    row.className = "fail";
+                    row.textContent =
+                        "✗ " + name + "：" + error.message;
+
+                    failed++;
+                }
+
+                results.appendChild(row);
+            }
+
+            const NOW = Date.now();
+
+            const breedId = document
+                .querySelector("#breedId")
+                .value.trim();
+
+            let mother;
+            let father;
+
+            try {
+
+                mother = createAnimal({
+                    id: "TEST_MOTHER",
+                    breedId,
+                    sex: "female",
+                    stage: "adult",
+                    location: "nursery"
+                });
+
+                father = createAnimal({
+                    id: "TEST_FATHER",
+                    breedId,
+                    sex: "male",
+                    stage: "adult",
+                    location: "nursery"
+                });
+
+            } catch (error) {
+                results.textContent = error.message;
+                return;
+            }
+
+            const records = {
+                [mother.id]: structuredClone(mother),
+                [father.id]: structuredClone(father)
+            };
+
+            const eggs = [];
+
+            const options = {
+                mother,
+                father,
+                eggId: "EGG_TEST_001",
+                offspringId: "TEST_CHILD",
+                eggs,
+                pedigreeRecords: records,
+                now: NOW
+            };
+
+            const result = startBreeding(options);
+
+            test("繁育成功", () => {
+                return result.success === true;
+            });
+
+            if (!result.success) {
+                eggData.textContent =
+                    JSON.stringify(result, null, 2);
+                return;
+            }
+
+            const egg = result.egg;
+
+            test("仅生成一枚犬蛋", () => {
+                return eggs.length === 1;
+            });
+
+            test("犬蛋ID正确", () => {
+                return egg.id === "EGG_TEST_001";
+            });
+
+            test("后代ID正确", () => {
+                return egg.offspringId === "TEST_CHILD";
+            });
+
+            test("后代犬种与母本相同", () => {
+                return egg.breedId === mother.breedId;
+            });
+
+            test("父母编号记录正确", () => {
+                return (
+                    egg.motherId === mother.id &&
+                    egg.fatherId === father.id
+                );
+            });
+
+            test("已生成后代基因型", () => {
+                return Boolean(
+                    egg.offspringData.genotype
+                );
+            });
+
+            test("母本繁育次数扣除1次", () => {
+                return getRemainingBreedings(mother) === 9;
+            });
+
+            test("父本繁育次数扣除1次", () => {
+                return getRemainingBreedings(father) === 9;
+            });
+
+            test("母本进入24小时冷却", () => {
+                return (
+                    getRemainingCooldown(mother, NOW)
+                    === DAY
+                );
+            });
+
+            test("父本进入24小时冷却", () => {
+                return (
+                    getRemainingCooldown(father, NOW)
+                    === DAY
+                );
+            });
+
+            test("孵化时长为24小时", () => {
+                return (
+                    egg.hatchAt - egg.createdAt
+                    === INCUBATION_MS
+                );
+            });
+
+            test("初始孵化进度为0%", () => {
+                return getIncubationProgress(egg, NOW) === 0;
+            });
+
+            test("12小时后孵化进度为50%", () => {
+                return (
+                    getIncubationProgress(
+                        egg,
+                        NOW + 12 * HOUR
+                    ) === 50
+                );
+            });
+
+            test("23小时59分钟不能孵化", () => {
+                return !isEggReady(
+                    egg,
+                    NOW + DAY - 60000
+                );
+            });
+
+            test("满24小时可以孵化", () => {
+                return isEggReady(egg, NOW + DAY);
+            });
+
+            test("超过24小时进度不会超过100%", () => {
+                return (
+                    getIncubationProgress(
+                        egg,
+                        NOW + 2 * DAY
+                    ) === 100
+                );
+            });
+
+            test("剩余时间不会为负数", () => {
+                return (
+                    getRemainingIncubation(
+                        egg,
+                        NOW + 2 * DAY
+                    ) === 0
+                );
+            });
+
+            test("犬蛋状态正确切换", () => {
+                return (
+                    getEggStatus(egg, NOW) === "incubating" &&
+                    getEggStatus(egg, NOW + DAY) === "ready"
+                );
+            });
+
+            test("重复点击不会生成第二枚犬蛋", () => {
+
+                const repeat = startBreeding(options);
+
+                return (
+                    !repeat.success &&
+                    eggs.length === 1
+                );
+            });
+
+            test("更换ID后冷却期间仍不能繁育", () => {
+
+                const repeat = startBreeding({
+                    ...options,
+                    eggId: "EGG_TEST_002",
+                    offspringId: "TEST_CHILD_2"
+                });
+
+                return (
+                    !repeat.success &&
+                    eggs.length === 1
+                );
+            });
+
+            test("繁育失败不额外扣除次数", () => {
+                return (
+                    getRemainingBreedings(mother) === 9 &&
+                    getRemainingBreedings(father) === 9
+                );
+            });
+
+            test("犬蛋可以序列化并恢复", () => {
+
+                const saved = JSON.stringify(egg);
+                const restored = JSON.parse(saved);
+
+                return JSON.stringify(restored) === saved;
+            });
+
+            test("孵化计时不会改变后代数据", () => {
+
+                const before =
+                    JSON.stringify(egg.offspringData);
+
+                getIncubationProgress(
+                    egg,
+                    NOW + DAY
+                );
+
+                return (
+                    before ===
+                    JSON.stringify(egg.offspringData)
+                );
+            });
+
+            const summary = document.createElement("h2");
+
+            summary.textContent =
+                `测试完成：${passed} 项通过，${failed} 项失败`;
+
+            summary.className =
+                failed === 0 ? "pass" : "fail";
+
+            results.appendChild(summary);
+
+            eggData.textContent =
+                JSON.stringify(egg, null, 2);
+        }
+
+    </script>
+</body>
+</html>

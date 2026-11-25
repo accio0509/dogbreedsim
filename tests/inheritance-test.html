@@ -1,0 +1,1958 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>V0.3.0 属性与血统遗传测试</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: auto;
+            max-width: 1000px;
+            padding: 30px;
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f3f5f2;
+            color: #303a32;
+        }
+
+        section {
+            background: white;
+            border: 1px solid #dce3dc;
+            border-radius: 8px;
+            margin: 15px 0;
+            padding: 20px;
+        }
+
+        h3 {
+            margin-top: 0;
+        }
+
+        .pass {
+            color: #38764c;
+        }
+
+        .fail {
+            color: #b94a48;
+        }
+
+        .muted {
+            color: #778178;
+        }
+
+        button {
+            background: #52765b;
+            color: white;
+            padding: 12px 20px;
+            border: 0;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.8;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<h1>V0.3.0 属性与血统遗传测试</h1>
+
+<p class="muted">
+    验证个体值、性格、体重、性别、
+    血统以及完整后代遗传。
+</p>
+
+<button id="run">
+    重新运行全部测试
+</button>
+
+<h2 id="summary">
+    准备测试……
+</h2>
+
+<div id="results"></div>
+
+
+<script type="module">
+
+import {
+    STAT_KEYS,
+    calculateTotal,
+    calculateStats
+} from "../engine/stats.js";
+
+import {
+    PERSONALITIES
+} from "../data/species/dog/personalities.js";
+
+import {
+    DOG_NAMES
+} from "../data/species/dog/names.js";
+
+import {
+    getBreed
+} from "../data/species/dog/breeds.js";
+
+import {
+    createAnimal,
+    calculateAdultWeight
+} from "../engine/animal.js";
+
+import {
+    validateGenotype
+} from "../engine/genetics.js";
+
+import {
+    sampleWithoutReplacement,
+    validateIV,
+    inheritIV,
+    inheritPersonality,
+    inheritWeightGene,
+    generateSex,
+    inheritPedigree,
+    inheritAttributes
+} from "../engine/inheritance.js";
+
+import {
+    generateOffspringData,
+    createOffspringFromData
+} from "../engine/offspring.js";
+
+
+// ==============================================
+// 基础测试工具
+// ==============================================
+
+
+const N = 10000;
+
+let passed = 0;
+
+let failed = 0;
+
+const results =
+    document.getElementById("results");
+
+
+function assert(condition, message) {
+
+    if (!condition) {
+
+        throw new Error(message);
+
+    }
+
+}
+
+
+function near(
+    actual,
+    expected,
+    tolerance = 0.025
+) {
+
+    assert(
+
+        Math.abs(actual - expected) <= tolerance,
+
+        `实际 ${actual}，预期 ${expected}`
+
+    );
+
+}
+
+
+function pct(value) {
+
+    return (
+        value * 100
+    ).toFixed(2) + "%";
+
+}
+
+
+function equal(a, b) {
+
+    return JSON.stringify(a) ===
+        JSON.stringify(b);
+
+}
+
+
+function expectError(fn) {
+
+    let rejected = false;
+
+    try {
+
+        fn();
+
+    } catch {
+
+        rejected = true;
+
+    }
+
+    assert(
+        rejected,
+        "非法数据未被拒绝。"
+    );
+
+}
+
+
+function test(title, fn) {
+
+    const panel =
+        document.createElement("section");
+
+    const heading =
+        document.createElement("h3");
+
+    const content =
+        document.createElement("pre");
+
+    try {
+
+        const detail = fn();
+
+        heading.className = "pass";
+
+        heading.textContent =
+            "✓ " + title;
+
+        content.textContent =
+            detail ?? "通过";
+
+        passed++;
+
+    } catch (error) {
+
+        heading.className = "fail";
+
+        heading.textContent =
+            "✗ " + title;
+
+        content.textContent =
+            error.stack ?? error.message;
+
+        failed++;
+
+        console.error(
+            title,
+            error
+        );
+
+    }
+
+    panel.append(
+        heading,
+        content
+    );
+
+    results.appendChild(panel);
+
+}
+
+
+// ==============================================
+// 创建固定测试亲本
+// ==============================================
+
+
+function makeParents() {
+
+    const mother = createAnimal({
+
+        id: "TEST_MOTHER",
+
+        breedId: "corgi",
+
+        sex: "female",
+
+        stage: "adult",
+
+        personality: "brave",
+
+        weightGene: 30,
+
+        iv: {
+
+            STR: 9,
+
+            SPD: 4,
+
+            STA: 10,
+
+            AGI: 6,
+
+            INT: 8,
+
+            PER: 3
+
+        }
+
+    });
+
+    const father = createAnimal({
+
+        id: "TEST_FATHER",
+
+        breedId: "corgi",
+
+        sex: "male",
+
+        stage: "adult",
+
+        personality: "lively",
+
+        weightGene: 70,
+
+        iv: {
+
+            STR: 3,
+
+            SPD: 10,
+
+            STA: 5,
+
+            AGI: 9,
+
+            INT: 6,
+
+            PER: 8
+
+        }
+
+    });
+
+    return {
+        mother,
+        father
+    };
+
+}
+
+
+// ==============================================
+// 01 无放回抽样
+// ==============================================
+
+
+function testSampling() {
+
+    const original = [...STAT_KEYS];
+
+    for (let i = 0; i < 1000; i++) {
+
+        const sample =
+            sampleWithoutReplacement(
+                STAT_KEYS,
+                3
+            );
+
+        assert(
+            sample.length === 3,
+            "抽样数量错误"
+        );
+
+        assert(
+
+            new Set(sample).size === 3,
+
+            "重复抽取能力维度"
+
+        );
+
+        assert(
+
+            sample.every(
+                key => STAT_KEYS.includes(key)
+            ),
+
+            "抽取了未知维度"
+
+        );
+
+    }
+
+    assert(
+
+        equal(STAT_KEYS, original),
+
+        "原始能力数组被修改"
+
+    );
+
+    return "无放回抽样正常，原数组未改变。";
+
+}
+
+
+// ==============================================
+// 02 个体值遗传结构
+// ==============================================
+
+
+function testIVStructure() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    for (let i = 0; i < N; i++) {
+
+        const result = inheritIV(
+            mother,
+            father
+        );
+
+        assert(
+
+            validateIV(result.iv),
+
+            "后代个体值非法"
+
+        );
+
+        assert(
+
+            result.inheritedKeys.length === 3,
+
+            "继承维度数量不是3"
+
+        );
+
+        assert(
+
+            new Set(
+                result.inheritedKeys
+            ).size === 3,
+
+            "继承维度重复"
+
+        );
+
+        let inherited = 0;
+
+        let random = 0;
+
+        for (const key of STAT_KEYS) {
+
+            const source =
+                result.sources[key];
+
+            if (source === "mother") {
+
+                inherited++;
+
+                assert(
+
+                    result.iv[key] ===
+                    mother.iv[key],
+
+                    "母系个体值错误"
+
+                );
+
+            } else if (source === "father") {
+
+                inherited++;
+
+                assert(
+
+                    result.iv[key] ===
+                    father.iv[key],
+
+                    "父系个体值错误"
+
+                );
+
+            } else if (source === "random") {
+
+                random++;
+
+            } else {
+
+                throw new Error(
+                    "未知个体值来源"
+                );
+
+            }
+
+            assert(
+
+                result.inheritedKeys
+                    .includes(key) ===
+                    (source !== "random"),
+
+                "继承维度与来源记录不一致"
+
+            );
+
+        }
+
+        assert(
+            inherited === 3,
+            "遗传维度不是3"
+        );
+
+        assert(
+            random === 3,
+            "随机维度不是3"
+        );
+
+    }
+
+    return `验证 ${N} 组后代个体值，全部合法。`;
+
+}
+
+
+// ==============================================
+// 03 各能力维度被选中的概率
+// ==============================================
+
+
+function testIVSelectionProbability() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    const counts = Object.fromEntries(
+
+        STAT_KEYS.map(
+            key => [key, 0]
+        )
+
+    );
+
+    for (let i = 0; i < N; i++) {
+
+        const result = inheritIV(
+            mother,
+            father
+        );
+
+        for (
+            const key of
+            result.inheritedKeys
+        ) {
+
+            counts[key]++;
+
+        }
+
+    }
+
+    for (const key of STAT_KEYS) {
+
+        near(
+
+            counts[key] / N,
+
+            0.5
+
+        );
+
+    }
+
+    return STAT_KEYS.map(
+
+        key =>
+
+            `${key}：${pct(counts[key] / N)}`
+
+    ).join("\n");
+
+}
+
+
+// ==============================================
+// 04 父系母系遗传概率
+// ==============================================
+
+
+function testIVParentProbability() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    let maternal = 0;
+
+    let paternal = 0;
+
+    for (let i = 0; i < N; i++) {
+
+        const result = inheritIV(
+            mother,
+            father
+        );
+
+        for (
+            const source of
+            Object.values(result.sources)
+        ) {
+
+            if (source === "mother") {
+                maternal++;
+            }
+
+            if (source === "father") {
+                paternal++;
+            }
+
+        }
+
+    }
+
+    const total = N * 3;
+
+    near(maternal / total, 0.5);
+
+    near(paternal / total, 0.5);
+
+    return [
+
+        `母系：${pct(maternal / total)}`,
+
+        `父系：${pct(paternal / total)}`
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 05 随机个体值均匀分布
+// ==============================================
+
+
+function testRandomIV() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    const counts =
+        Array(11).fill(0);
+
+    for (let i = 0; i < N; i++) {
+
+        const result = inheritIV(
+            mother,
+            father
+        );
+
+        for (const key of STAT_KEYS) {
+
+            if (
+                result.sources[key] === "random"
+            ) {
+
+                counts[result.iv[key]]++;
+
+            }
+
+        }
+
+    }
+
+    const total = N * 3;
+
+    for (const count of counts) {
+
+        near(
+
+            count / total,
+
+            1 / 11,
+
+            0.012
+
+        );
+
+    }
+
+    return counts.map(
+
+        (count, value) =>
+
+            `IV ${value}：${pct(count / total)}`
+
+    ).join("\n");
+
+}
+
+
+// ==============================================
+// 06 不同性格亲本
+// ==============================================
+
+
+function testDifferentPersonalities() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    const counts = {
+
+        mother: 0,
+
+        father: 0,
+
+        random: 0
+
+    };
+
+    const otherPersonalities =
+        new Set();
+
+    for (let i = 0; i < N; i++) {
+
+        const result =
+            inheritPersonality(
+                mother,
+                father
+            );
+
+        counts[result.source]++;
+
+        if (result.source === "mother") {
+
+            assert(
+
+                result.personality ===
+                mother.personality,
+
+                "母系性格错误"
+
+            );
+
+        }
+
+        if (result.source === "father") {
+
+            assert(
+
+                result.personality ===
+                father.personality,
+
+                "父系性格错误"
+
+            );
+
+        }
+
+        if (result.source === "random") {
+
+            assert(
+
+                result.personality !==
+                mother.personality &&
+
+                result.personality !==
+                father.personality,
+
+                "随机性格包含亲本性格"
+
+            );
+
+            otherPersonalities.add(
+                result.personality
+            );
+
+        }
+
+    }
+
+    near(counts.mother / N, 0.1);
+
+    near(counts.father / N, 0.1);
+
+    near(counts.random / N, 0.8);
+
+    assert(
+
+        otherPersonalities.size ===
+            Object.keys(PERSONALITIES).length - 2,
+
+        "随机性格候选池不完整"
+
+    );
+
+    return [
+
+        `母系性格：${pct(counts.mother / N)}`,
+
+        `父系性格：${pct(counts.father / N)}`,
+
+        `其他性格：${pct(counts.random / N)}`,
+
+        `其他性格数量：${otherPersonalities.size}`
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 07 相同性格亲本
+// ==============================================
+
+
+function testSamePersonalities() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    father.personality =
+        mother.personality;
+
+    let same = 0;
+
+    const others = new Set();
+
+    for (let i = 0; i < N; i++) {
+
+        const result =
+            inheritPersonality(
+                mother,
+                father
+            );
+
+        if (
+
+            result.personality ===
+            mother.personality
+
+        ) {
+
+            same++;
+
+        } else {
+
+            others.add(
+                result.personality
+            );
+
+        }
+
+    }
+
+    near(same / N, 0.2);
+
+    assert(
+
+        others.size ===
+            Object.keys(PERSONALITIES).length - 1,
+
+        "其他性格数量不正确"
+
+    );
+
+    return [
+
+        `相同亲本性格：${pct(same / N)}`,
+
+        `其他性格：${pct(1 - same / N)}`,
+
+        `其他性格数量：${others.size}`
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 08 体重遗传分布
+// ==============================================
+
+
+function testWeightDistribution() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    let total = 0;
+
+    let minimum = 100;
+
+    let maximum = 0;
+
+    for (let i = 0; i < N; i++) {
+
+        const result =
+            inheritWeightGene(
+                mother,
+                father
+            );
+
+        const value =
+            result.weightGene;
+
+        assert(
+
+            value >= 40 &&
+            value <= 60,
+
+            "体重遗传值超出40～60"
+
+        );
+
+        assert(
+
+            Number.isInteger(value),
+
+            "体重遗传值不是整数"
+
+        );
+
+        assert(
+
+            result.parentalAverage === 50,
+
+            "父母平均体重基因错误"
+
+        );
+
+        assert(
+
+            result.offset >= -10 &&
+            result.offset <= 10,
+
+            "体重随机波动超出范围"
+
+        );
+
+        total += value;
+
+        minimum = Math.min(
+            minimum,
+            value
+        );
+
+        maximum = Math.max(
+            maximum,
+            value
+        );
+
+    }
+
+    near(
+        total / N,
+        50,
+        0.3
+    );
+
+    return [
+
+        "母本：30，父本：70",
+
+        `最小值：${minimum}`,
+
+        `最大值：${maximum}`,
+
+        `平均值：${(total / N).toFixed(2)}`
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 09 体重上下限
+// ==============================================
+
+
+function testWeightLimits() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    for (const value of [0, 100]) {
+
+        mother.weightGene = value;
+
+        father.weightGene = value;
+
+        for (let i = 0; i < 1000; i++) {
+
+            const result =
+                inheritWeightGene(
+                    mother,
+                    father
+                );
+
+            assert(
+
+                result.weightGene >= 0 &&
+
+                result.weightGene <= 100,
+
+                "体重遗传值越界"
+
+            );
+
+            if (value === 0) {
+
+                assert(
+
+                    result.weightGene <= 10,
+
+                    "最小体重基因计算错误"
+
+                );
+
+            }
+
+            if (value === 100) {
+
+                assert(
+
+                    result.weightGene >= 90,
+
+                    "最大体重基因计算错误"
+
+                );
+
+            }
+
+        }
+
+    }
+
+    // 检查小数平均值的取整
+
+    mother.weightGene = 30;
+
+    father.weightGene = 31;
+
+    for (let i = 0; i < 100; i++) {
+
+        const result =
+            inheritWeightGene(
+                mother,
+                father
+            );
+
+        assert(
+
+            result.weightGene ===
+                Math.round(result.rawValue),
+
+            "体重基因取整错误"
+
+        );
+
+    }
+
+    return "体重范围限制与四舍五入正常。";
+
+}
+
+
+// ==============================================
+// 10 性别比例
+// ==============================================
+
+
+function testSexRatio() {
+
+    let female = 0;
+
+    let male = 0;
+
+    for (let i = 0; i < N; i++) {
+
+        const sex = generateSex();
+
+        if (sex === "female") {
+
+            female++;
+
+        } else if (sex === "male") {
+
+            male++;
+
+        } else {
+
+            throw new Error(
+                "未知性别"
+            );
+
+        }
+
+    }
+
+    near(female / N, 0.5);
+
+    near(male / N, 0.5);
+
+    return [
+
+        `母犬：${pct(female / N)}`,
+
+        `公犬：${pct(male / N)}`
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 11 血统与世代
+// ==============================================
+
+
+function testPedigree() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    const first = inheritPedigree(
+        mother,
+        father
+    );
+
+    assert(
+
+        first.generation === 2,
+
+        "第一代亲本后代不是第二代"
+
+    );
+
+    mother.pedigree.generation = 3;
+
+    father.pedigree.generation = 7;
+
+    const result = inheritPedigree(
+        mother,
+        father
+    );
+
+    assert(
+
+        result.generation === 8,
+
+        "跨世代繁育计算错误"
+
+    );
+
+    assert(
+
+        result.motherId === mother.id,
+
+        "母亲编号错误"
+
+    );
+
+    assert(
+
+        result.fatherId === father.id,
+
+        "父亲编号错误"
+
+    );
+
+    return [
+
+        "第一代 × 第一代 → 第二代",
+
+        "第三代 × 第七代 → 第八代",
+
+        "父母编号记录正确"
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 12 完整后代生成
+// ==============================================
+
+
+function testCompleteOffspring() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    // 给亲本添加努力值，检查是否遗传
+
+    for (const key of STAT_KEYS) {
+
+        mother.ev[key] = 50;
+
+        father.ev[key] = 30;
+
+    }
+
+    let count = 0;
+
+    for (let i = 0; i < 1000; i++) {
+
+        const data =
+            generateOffspringData(
+
+                mother,
+
+                father,
+
+                "CHILD_" + i
+
+            );
+
+        const child =
+            createOffspringFromData(data);
+
+        assert(
+
+            child.breedId === mother.breedId,
+
+            "犬种没有继承母亲"
+
+        );
+
+        assert(
+
+            validateGenotype(child.genotype),
+
+            "外貌基因无效"
+
+        );
+
+        assert(
+
+            validateIV(child.iv),
+
+            "个体值无效"
+
+        );
+
+        assert(
+
+            child.stage === "puppy",
+
+            "后代不是幼犬"
+
+        );
+
+        assert(
+
+            child.exp === 0,
+
+            "初始成长经验不为0"
+
+        );
+
+        assert(
+
+            calculateTotal(child.ev) === 0,
+
+            "后代继承了努力值"
+
+        );
+
+        assert(
+
+            child.source === "breeding",
+
+            "犬只来源错误"
+
+        );
+
+        assert(
+
+            child.pedigree.generation === 2,
+
+            "后代世代错误"
+
+        );
+
+        assert(
+
+            DOG_NAMES.includes(child.name),
+
+            "后代未获得随机名称"
+
+        );
+
+        assert(
+
+            child.inheritance.iv
+                .inheritedKeys.length === 3,
+
+            "遗传记录不完整"
+
+        );
+
+        assert(
+
+            Number.isFinite(
+                child.mutationInfo.rate
+            ),
+
+            "缺少突变概率记录"
+
+        );
+
+        const stats =
+            calculateStats(child);
+
+        assert(
+
+            Object.values(stats)
+                .every(Number.isFinite),
+
+            "实际能力计算异常"
+
+        );
+
+        count++;
+
+    }
+
+    return [
+
+        `成功生成 ${count} 只完整幼犬`,
+
+        "外貌、个体值、性格、体重合法",
+
+        "努力值和成长经验均为0",
+
+        "血统与突变记录完整"
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 13 跨犬种体重与种族值
+// ==============================================
+
+
+function testCrossBreedWeight() {
+
+    const {
+        mother
+    } = makeParents();
+
+    const father = createAnimal({
+
+        id: "CHIHUAHUA_FATHER",
+
+        breedId: "chihuahua",
+
+        sex: "male",
+
+        stage: "adult",
+
+        weightGene: 70
+
+    });
+
+    const data =
+        generateOffspringData(
+
+            mother,
+
+            father,
+
+            "CROSS_CHILD"
+
+        );
+
+    const child =
+        createOffspringFromData(data);
+
+    const breed = getBreed(
+        mother.breedId
+    );
+
+    const expectedWeight =
+
+        breed.weightRange.min +
+
+        (
+            breed.weightRange.max -
+            breed.weightRange.min
+        ) * child.weightGene / 100;
+
+    assert(
+
+        child.breedId === mother.breedId,
+
+        "跨犬种后代犬种错误"
+
+    );
+
+    near(
+
+        calculateAdultWeight(child),
+
+        expectedWeight,
+
+        0.000001
+
+    );
+
+    assert(
+
+        equal(
+
+            getBreed(child.breedId).baseStats,
+
+            breed.baseStats
+
+        ),
+
+        "后代种族值错误"
+
+    );
+
+    return [
+
+        `母系犬种：${breed.name}`,
+
+        `后代体重基因：${child.weightGene}`,
+
+        `成年体重：${expectedWeight.toFixed(2)} kg`,
+
+        "体重范围及种族值均采用母系犬种"
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 14 孵化不会重新遗传
+// ==============================================
+
+
+function testNoReroll() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    const data =
+        generateOffspringData(
+
+            mother,
+
+            father,
+
+            "FIXED_CHILD"
+
+        );
+
+    const before =
+        JSON.stringify(data);
+
+    // 模拟将狗狗蛋数据保存并重新读取
+
+    const loaded = JSON.parse(
+        before
+    );
+
+    const fields = [
+
+        "id",
+
+        "name",
+
+        "breedId",
+
+        "sex",
+
+        "genotype",
+
+        "iv",
+
+        "personality",
+
+        "weightGene",
+
+        "pedigree",
+
+        "inheritance",
+
+        "mutationInfo"
+
+    ];
+
+    // 创建幼犬时不应该调用随机数
+
+    const originalRandom =
+        Math.random;
+
+    let child1;
+
+    let child2;
+
+    try {
+
+        Math.random = () => {
+
+            throw new Error(
+                "孵化时发生了随机重抽"
+            );
+
+        };
+
+        child1 =
+            createOffspringFromData(
+                data,
+                "nursery"
+            );
+
+        child2 =
+            createOffspringFromData(
+                loaded,
+                "computer"
+            );
+
+    } finally {
+
+        Math.random =
+            originalRandom;
+
+    }
+
+    for (const field of fields) {
+
+        assert(
+
+            equal(child1[field], data[field]),
+
+            `${field} 孵化后改变`
+
+        );
+
+        assert(
+
+            equal(child2[field], data[field]),
+
+            `${field} 重新读取后改变`
+
+        );
+
+    }
+
+    assert(
+
+        JSON.stringify(data) === before,
+
+        "孵化修改了原始狗狗蛋数据"
+
+    );
+
+    // 修改幼犬不应影响遗传数据
+
+    child1.iv.STR = 99;
+
+    assert(
+
+        JSON.stringify(data) === before,
+
+        "幼犬修改影响了原始遗传数据"
+
+    );
+
+    return [
+
+        "遗传数据能够JSON序列化",
+
+        "重新读取后属性保持一致",
+
+        "孵化过程没有调用随机数",
+
+        "幼犬与原始遗传数据相互独立"
+
+    ].join("\n");
+
+}
+
+
+// ==============================================
+// 15 亲本数据保护
+// ==============================================
+
+
+function testParentProtection() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+    const before = JSON.stringify([
+
+        mother,
+
+        father
+
+    ]);
+
+    for (let i = 0; i < 100; i++) {
+
+        const data =
+            generateOffspringData(
+
+                mother,
+
+                father,
+
+                "PROTECT_" + i
+
+            );
+
+        const child =
+            createOffspringFromData(data);
+
+        child.iv.STR = 99;
+
+        child.weightGene = 99;
+
+        child.pedigree.generation = 99;
+
+    }
+
+    assert(
+
+        JSON.stringify([
+            mother,
+            father
+        ]) === before,
+
+        "生成后代时修改了亲本"
+
+    );
+
+    return "亲本数据未发生任何变化。";
+
+}
+
+
+// ==============================================
+// 16 非法数据保护
+// ==============================================
+
+
+function testInvalidData() {
+
+    const {
+        mother,
+        father
+    } = makeParents();
+
+
+    // 非法IV
+
+    const invalidIV = {
+
+        ...mother.iv,
+
+        STR: 11
+
+    };
+
+    expectError(
+
+        () => validateIV(invalidIV)
+
+    );
+
+
+    // 错误的亲本顺序
+
+    expectError(
+
+        () => inheritAttributes(
+            father,
+            mother
+        )
+
+    );
+
+
+    // 编号冲突
+
+    expectError(
+
+        () => generateOffspringData(
+
+            mother,
+
+            father,
+
+            mother.id
+
+        )
+
+    );
+
+
+    // 无效体重遗传值
+
+    const invalidWeight = {
+
+        ...mother,
+
+        weightGene: 101
+
+    };
+
+    expectError(
+
+        () => inheritWeightGene(
+
+            invalidWeight,
+
+            father
+
+        )
+
+    );
+
+
+    // 无效世代
+
+    const invalidGeneration = {
+
+        ...mother,
+
+        pedigree: {
+
+            ...mother.pedigree,
+
+            generation: 0
+
+        }
+
+    };
+
+    expectError(
+
+        () => inheritPedigree(
+
+            invalidGeneration,
+
+            father
+
+        )
+
+    );
+
+
+    // 缺少遗传属性时不能偷偷重抽
+
+    const data =
+        generateOffspringData(
+
+            mother,
+
+            father,
+
+            "INVALID_CHILD"
+
+        );
+
+    delete data.iv;
+
+    expectError(
+
+        () => createOffspringFromData(data)
+
+    );
+
+    return "全部非法数据均得到拦截。";
+
+}
+
+
+// ==============================================
+// 运行全部测试
+// ==============================================
+
+
+function runAllTests() {
+
+    results.innerHTML = "";
+
+    passed = 0;
+
+    failed = 0;
+
+    const start = performance.now();
+
+    const tests = [
+
+        [
+            "01 无放回抽样",
+            testSampling
+        ],
+
+        [
+            "02 个体值遗传结构",
+            testIVStructure
+        ],
+
+        [
+            "03 能力维度选择概率",
+            testIVSelectionProbability
+        ],
+
+        [
+            "04 父系母系遗传概率",
+            testIVParentProbability
+        ],
+
+        [
+            "05 随机个体值分布",
+            testRandomIV
+        ],
+
+        [
+            "06 不同性格亲本",
+            testDifferentPersonalities
+        ],
+
+        [
+            "07 相同性格亲本",
+            testSamePersonalities
+        ],
+
+        [
+            "08 体重遗传分布",
+            testWeightDistribution
+        ],
+
+        [
+            "09 体重上下限",
+            testWeightLimits
+        ],
+
+        [
+            "10 性别比例",
+            testSexRatio
+        ],
+
+        [
+            "11 血统与世代",
+            testPedigree
+        ],
+
+        [
+            "12 完整后代生成",
+            testCompleteOffspring
+        ],
+
+        [
+            "13 跨犬种体重与种族值",
+            testCrossBreedWeight
+        ],
+
+        [
+            "14 孵化不会重新遗传",
+            testNoReroll
+        ],
+
+        [
+            "15 亲本数据保护",
+            testParentProtection
+        ],
+
+        [
+            "16 非法数据保护",
+            testInvalidData
+        ]
+
+    ];
+
+    for (const [title, fn] of tests) {
+
+        test(title, fn);
+
+    }
+
+    const elapsed = (
+
+        (performance.now() - start) /
+        1000
+
+    ).toFixed(2);
+
+    const summary =
+        document.getElementById("summary");
+
+    summary.textContent =
+
+        `${passed}/${passed + failed} 项通过` +
+
+        `｜失败 ${failed} 项` +
+
+        `｜耗时 ${elapsed} 秒`;
+
+    summary.className =
+        failed === 0 ? "pass" : "fail";
+
+}
+
+
+document.getElementById("run")
+
+    .addEventListener(
+
+        "click",
+
+        runAllTests
+
+    );
+
+
+runAllTests();
+
+</script>
+
+</body>
+
+</html>

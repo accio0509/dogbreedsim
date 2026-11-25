@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>V0.9.0 综合验收</title><style>body{font:16px/1.65 system-ui,sans-serif;margin:24px;max-width:1000px}.pass{color:#267744}.fail{color:#b34840}button{padding:10px}details{margin:10px 0}</style></head><body><h1>V0.9.0 犬舍经营与收集 · 综合验收</h1><p>使用真实引擎和内存模拟存档，不会读取、清空或修改正式游戏存档。</p><button id="run">运行全部自动测试</button><p id="summary" role="status"></p><div id="results"></div><script type="module">
+import {runV090Checks} from './v090-checks.js';
+import {runV080Checks} from './v080-checks.js';
+import {runRentalChecks} from './rental-checks.js';
+import {runTrainingChecks} from './training-checks.js';
+import {runExplorationChecks} from './exploration-checks.js';
+import {getAllBreeds} from '../data/species/dog/breeds.js';
+import {runMarketChecks} from './market-checks.js';
+import {runFormalChecks} from './formal-checks.js';
+import {runReleaseChecks} from './release-checks.js';
+import {runLifecycleChecks} from './lifecycle-checks.js';
+import {runDevChecks} from './dev-checks.js';
+document.getElementById('run').onclick=()=>{const root=document.getElementById('results');root.replaceChildren();let pass=0,fail=0;function group(label,fn){const d=document.createElement('details'),title=document.createElement('summary');d.append(title);let p=0,f=0,tests;try{tests=fn();}catch(e){tests=[{name:'初始化异常',success:false,message:e.message}];}for(const x of tests){const row=document.createElement('div');row.className=x.success?'pass':'fail';row.textContent=(x.success?'✓ ':'✗ ')+x.name+(x.message?'：'+x.message:'');d.append(row);x.success?p++:f++;}title.textContent=`${label}：${p} 通过，${f} 失败`;d.open=!!f;root.append(d);pass+=p;fail+=f;}group('V0.9.0 新增测试',runV090Checks);group('V0.8.0 回归测试',runV080Checks);group('租借配种回归',runRentalChecks);group('训练回归测试',runTrainingChecks);group('探索回归测试',runExplorationChecks);group('市场回归测试',runMarketChecks);for(const b of getAllBreeds())group(b.name+' · 原功能回归',()=>[...runFormalChecks(b.id),...runReleaseChecks(b.id),...runLifecycleChecks(b.id),...runDevChecks(b.id)]);document.getElementById('summary').textContent=`${pass} 项通过，${fail} 项失败`;};
+</script></body></html>

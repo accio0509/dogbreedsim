@@ -1,0 +1,510 @@
+:root {
+    --background: #f3f5f2;
+    --surface: #ffffff;
+    --sidebar: #e3eae2;
+    --primary: #52765b;
+    --primary-hover: #42634b;
+    --border: #dce3dc;
+    --text: #303a32;
+    --muted: #778178;
+    --radius: 8px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Microsoft YaHei", sans-serif;
+    background: var(--background);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+h1, h2, h3, p {
+    margin-top: 0;
+}
+
+h1 {
+    font-size: 22px;
+    margin-bottom: 0;
+}
+
+h2 {
+    font-size: 21px;
+}
+
+h3 {
+    font-size: 16px;
+}
+
+button, input {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.header {
+    min-height: 72px;
+    padding: 16px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.header-info {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+}
+
+#money-display {
+    font-weight: bold;
+    color: #927331;
+}
+
+#real-time {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.game-layout {
+    display: flex;
+    min-height: calc(100vh - 112px);
+}
+
+.sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--sidebar);
+    padding: 20px 14px;
+}
+
+.kennel-title {
+    padding: 8px 12px 20px;
+    font-weight: bold;
+    font-size: 16px;
+    overflow-wrap: anywhere;
+}
+
+.sidebar nav {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.sidebar button {
+    text-align: left;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 11px 14px;
+    border-radius: 6px;
+}
+
+.sidebar button:hover:not(:disabled) {
+    background: #d2dfd1;
+}
+
+.sidebar button.active:not(:disabled) {
+    background: var(--primary);
+    color: white;
+}
+
+#main-content {
+    flex: 1;
+    min-width: 0;
+    padding: 28px;
+}
+
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 20px;
+}
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.muted {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.primary-button,
+.secondary-button {
+    border-radius: 6px;
+    padding: 9px 16px;
+    border: 1px solid transparent;
+}
+
+.primary-button {
+    background: var(--primary);
+    color: white;
+}
+
+.primary-button:hover {
+    background: var(--primary-hover);
+}
+
+.secondary-button {
+    background: white;
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.secondary-button:hover {
+    background: var(--background);
+}
+
+.capacity-item {
+    margin-bottom: 14px;
+}
+
+.capacity-heading {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.progress-track {
+    height: 8px;
+    border-radius: 8px;
+    background: #e7ece6;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #83a58a;
+    border-radius: 8px;
+}
+
+.animal-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fill, minmax(230px, 1fr));
+    gap: 16px;
+}
+
+.animal-card {
+    min-width: 0;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.animal-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.animal-card-header h3 {
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+}
+
+.animal-placeholder {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    border: 1px solid #00000018;
+}
+
+.animal-placeholder.large {
+    width: 85px;
+    height: 85px;
+}
+
+.animal-meta {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.animal-summary {
+    display: grid;
+    gap: 5px;
+}
+
+.color-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.color-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #00000025;
+    border-radius: 3px;
+}
+
+.event-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.event-item:last-child {
+    border-bottom: none;
+}
+
+.event-time {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+}
+
+.setup-panel {
+    max-width: 760px;
+    margin: 30px auto;
+}
+
+#new-game-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+input[type="text"],
+input:not([type]) {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.breed-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.breed-option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.breed-option:has(input:checked) {
+    border-color: var(--primary);
+    background: #edf4ec;
+}
+
+.breed-option input {
+    align-self: flex-start;
+    accent-color: var(--primary);
+}
+
+dialog {
+    width: min(780px, 92vw);
+    max-height: 88vh;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    color: var(--text);
+    background: var(--surface);
+    overflow-y: auto;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.dialog-header h2 {
+    margin: 0;
+}
+
+.detail-section {
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+}
+
+.detail-section:last-child {
+    border-bottom: none;
+}
+
+.detail-title {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.detail-title h2,
+.detail-title p {
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+}
+
+.action-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: center;
+}
+
+.data-table th,
+.data-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+    background: #edf2ec;
+}
+
+.data-table small {
+    display: block;
+    color: var(--muted);
+}
+
+.total-row {
+    background: #f5f7f4;
+    font-weight: bold;
+}
+
+summary {
+    cursor: pointer;
+    font-weight: bold;
+    margin-bottom: 12px;
+}
+
+.footer {
+    min-height: 40px;
+    text-align: center;
+    padding: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+    .overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .header-info {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+    }
+
+    .sidebar {
+        width: 160px;
+    }
+
+    #main-content {
+        padding: 16px;
+    }
+}
+.rename-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.rename-group input {
+    width: 180px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+}
+
+.rename-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+/* Developer mode controls */
+.dev-buttons { display:flex; flex-wrap:wrap; gap:8px; }
+[hidden] { display:none !important; }
+
+/* V0.5.0 market */
+.market-card { align-self:start; }
+.market-confirm { padding:12px; border:1px solid var(--border); border-radius:6px; }
+.market-detail { margin-top:10px; overflow:auto; }
+.market-detail .data-table { min-width:420px; }
+
+.exploration-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;}
+.exploration-card{min-width:0;margin:0;}
+.exploration-card select{width:100%;margin-top:8px;}
+.exploration-card .dev-buttons{flex-wrap:wrap;}
+#exploration-preview{max-width:min(760px,90vw);max-height:85vh;overflow:auto;}
+
+.dog-filters{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin:12px 0}.dog-filters label{display:flex;flex-direction:column;gap:4px;min-width:100px}.dog-filters input,.dog-filters select{max-width:100%;padding:6px;border:1px solid #aaa8;border-radius:6px;background:transparent;color:inherit}.dog-filters button{width:auto!important}
+
+/* V0.10.0 breed tabs and connected family trees */
+.breed-tabs {display:flex;flex-wrap:wrap;gap:8px}.breed-tabs button[aria-pressed="true"] {outline:2px solid #477f65; font-weight:bold}.collection-genes{display:flex;flex-wrap:wrap;gap:12px}.family-scroll{overflow:auto;padding:12px 4px 24px}.family-tree,.family-tree ul{display:flex;justify-content:center;list-style:none;margin:0;padding:22px 0 0;position:relative;width:max-content;min-width:100%}.family-tree{padding-top:0}.family-tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:20px 6px 0;flex:none}.family-tree>li{padding-top:0}.family-tree li::before,.family-tree li::after{content:'';position:absolute;top:0;right:50%;width:50%;height:20px;border-top:1px solid #84958b}.family-tree li::after{right:auto;left:50%;border-left:1px solid #84958b}.family-tree li:only-child::before,.family-tree li:only-child::after{display:none}.family-tree li:first-child::before,.family-tree li:last-child::after{border-top:0}.family-tree li:last-child::before{border-right:1px solid #84958b}.family-tree ul::before{content:'';position:absolute;top:0;left:50%;height:22px;border-left:1px solid #84958b}.family-node{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:112px;max-width:160px;padding:8px;border:1px solid #84958b;border-radius:8px;overflow-wrap:anywhere}.family-node small{opacity:.7}.family-missing{border-style:dashed}.family-tree>li::before,.family-tree>li::after{display:none}
+/* Expanded interactive pedigree */
+.graph-scroll{max-height:72vh;border:1px solid #9ba99f;border-radius:8px;overflow:auto;padding:0}.family-graph{position:relative;min-width:100%}.family-graph svg{position:absolute;inset:0;pointer-events:none}.family-parent-edge{stroke:#87978d;stroke-width:1.5;fill:none}.family-mate-edge{stroke:#ba925d;stroke-width:1.7;stroke-dasharray:6 4;fill:none}.family-graph-node{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;width:160px;height:84px;gap:4px;background:#f9fbf8;color:#263b30;border:1px solid #87978d;border-radius:8px;overflow:hidden;overflow-wrap:anywhere}.family-focus{border:3px solid #477f65;background:#e0f0e5}.family-graph-node small{font-size:11px}.family-graph-node span{font-size:12px}#family-short[aria-pressed=true],#family-full[aria-pressed=true]{outline:2px solid #477f65}
+/* Family graph: orthogonal paths, shared mating junctions and scaled canvas. */
+.family-graph-scale{position:relative;overflow:hidden}.family-graph{min-width:0;transform-origin:top left}.family-junction{fill:#ba925d;stroke:#fff;stroke-width:1}.graph-scroll{cursor:grab;touch-action:none;user-select:none}.graph-scroll.family-panning{cursor:grabbing}.family-graph-node{cursor:pointer}.witch-panel{border-color:#9682ae;background:#f5f1fa;color:#332843}.witch-panel label{display:block;margin:6px 0}.witch-panel button{margin:6px 0}
+
+[hidden]{display:none!important}.picker-fold{margin:.5rem 0 1rem}.picker-fold summary,.picker-preview summary{cursor:pointer;color:#586b60}.picker-preview{margin:.35rem 0 .7rem;font-size:.85rem}.selected-preview{display:block;padding:.35rem .5rem;border-left:3px solid #819d88}.picker-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:5px;max-height:240px;overflow:auto}.picker-results button{text-align:left;font-size:.85rem}.inventory-grid,.breed-tabs,.aligned-genes{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px}.inventory-item,.aligned-genes span{display:flex;flex-direction:column;gap:4px;border:1px solid #ddd;border-radius:8px;padding:10px}.inventory-item small{display:block}.unowned{color:#888;background:#eee;filter:grayscale(1)}.gene-swatch{display:inline-block;width:22px;height:22px;border-radius:5px;border:1px solid #999}.breed-tabs button{min-height:42px;text-align:left}.breed-tabs button[aria-pressed=true]{background:#dce9dd;border-color:#779c80}.breed-page .panel{margin-bottom:12px}
+
+/* RC1 interface refinement */
+.sidebar .nav-group{display:flex;flex-direction:column;gap:5px;min-width:0}
+.sidebar .nav-group+.nav-group{border-top:1px solid var(--border);padding-top:8px;margin-top:5px}
+.activity-task{padding:10px 0;border-bottom:1px solid var(--border)}
+.activity-task:last-child{border-bottom:0}
+.activity-task p{margin:0 0 8px}
+.task-progress-label{display:block;text-align:right;margin-top:3px;font-variant-numeric:tabular-nums}
+.shop-grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr))}
+.shop-item{min-width:0;overflow-wrap:anywhere}
+.shop-item .shop-price{font-weight:bold;margin-top:auto;padding-top:8px}
+.shop-item button{width:100%;margin-top:4px}

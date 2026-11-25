@@ -1,0 +1,1 @@
+import './run-v090.mjs';import {runV100Checks} from './v100-checks.js';const r=runV100Checks();for(const t of r)console.log(t.success?'PASS':'FAIL',t.name,t.message??'');console.log(`${r.filter(x=>x.success).length}/${r.length} V0.10 checks passed`);if(r.some(x=>!x.success))process.exitCode=1;

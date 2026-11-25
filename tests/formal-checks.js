@@ -1,0 +1,31 @@
+import {createGameState} from '../storage/state.js';
+import {createSaveStore,migrateSave} from '../storage/save.js';
+import {createAnimal} from '../engine/animal.js';
+import {createFormalBreeding} from '../engine/formalBreeding.js';
+import {settleGrowth} from '../engine/growth.js';
+import {getAllBreeds} from '../data/species/dog/breeds.js';
+const H=3600000,DAY=24*H,T=1700000000000;
+export function runFormalChecks(breedId=getAllBreeds()[0].id){
+ const results=[];const test=(name,fn)=>{try{if(!fn())throw Error('结果不符');results.push({name,success:true});}catch(e){results.push({name,success:false,message:e.message});}};
+ const fresh=(stage='adult')=>{const s=createGameState();s.initialized=true;s.nextAnimalId=3;s.money=1234;s.kennelName='正式验收';for(const [id,sex] of [['DOG00001','female'],['DOG00002','male']]){const a=createAnimal({id,breedId,sex,stage});a.personality='calm';a.timestamps.lastGrowthAt=T;s.activeAnimals[id]=a;s.pedigreeRecords[id]=structuredClone(a);}return s;};
+ const memory=()=>{const m=new Map();return{getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)};};
+ const ok=r=>{if(!r.success)throw Error(r.message);return r;};
+ const setup=(s=fresh())=>{let at=T;const disk=memory(),store=createSaveStore(disk);store.save(s);const v=createFormalBreeding({state:s,persist:d=>store.save(d),now:()=>at});return{s,v,disk,store,advance:ms=>at+=ms};};
+ test('真实旧版对象存档迁移且保留其他字段',()=>{const s=fresh();s.version='0.3.0';s.inventory.x=5;const r=migrateSave(s);return r.version==='1.0.0'&&r.money===1234&&r.inventory.x===5&&r.activeAnimals.DOG00001.breeding.count===0&&s.version==='0.3.0';});
+ test('旧任务格式异常不覆盖',()=>{const s=fresh();s.version='0.3.0';s.incubationTasks=[{id:'legacy'}];try{migrateSave(s);}catch{return s.incubationTasks[0].id==='legacy';}return false;});
+ test('48小时离线成长封顶',()=>{const s=fresh('puppy');settleGrowth(s,T+72*H);return Object.values(s.activeAnimals).every(a=>a.exp===720&&a.stage==='adult');});
+ test('再成长24小时达到成年',()=>{const s=fresh('puppy');settleGrowth(s,T+48*H);settleGrowth(s,T+72*H);return Object.values(s.activeAnimals).every(a=>a.exp===720&&a.stage==='adult');});
+ test('电脑盒子及等待安置不自然成长',()=>{const s=fresh('puppy');s.activeAnimals.DOG00001.location='computer';s.activeAnimals.DOG00002.location='pending';settleGrowth(s,T+48*H);return Object.values(s.activeAnimals).every(a=>a.exp===0);});
+ test('正式产蛋使用顺序编号并保存事件',()=>{const {s,v,store}=setup();const e=ok(v.breed('DOG00001','DOG00002')).egg;const d=store.load();return e.id==='EGG00003'&&e.offspringId==='DOG00003'&&s.nextAnimalId===4&&d.incubationTasks.length===1&&d.events[0].type==='breeding'&&d.money===1234;});
+ test('正式孵化满员不修改存档',()=>{const {s,v,store}=setup();ok(v.breed('DOG00001','DOG00002'));const before=JSON.stringify(s);return !v.breed('DOG00001','DOG00002').success&&before===JSON.stringify(s)&&store.load().nextAnimalId===4;});
+ test('提前领取拒绝且不修改存档',()=>{const {s,v,advance}=setup();const e=ok(v.breed('DOG00001','DOG00002')).egg;advance(DAY-1);const before=JSON.stringify(s);return !v.claim(e.id,'').success&&before===JSON.stringify(s);});
+ test('重载后领取，保留遗传属性与家谱',()=>{const {v,store}=setup();const e=ok(v.breed('DOG00001','DOG00002')).egg;const s=store.load();const w=createFormalBreeding({state:s,persist:d=>store.save(d),now:()=>T+DAY});const p=ok(w.claim(e.id,'小团子')).puppy;const d=store.load();return d.incubationTasks.length===0&&d.activeAnimals[p.id].name==='小团子'&&d.pedigreeRecords[p.id].pedigree.motherId==='DOG00001'&&['genotype','iv','sex','personality','weightGene'].every(k=>JSON.stringify(p[k])===JSON.stringify(e.offspringData[k]))&&p.timestamps.lastGrowthAt===T+DAY;});
+ test('领取后不能重复领取',()=>{const {s,v,advance}=setup();const e=ok(v.breed('DOG00001','DOG00002')).egg;advance(DAY);ok(v.claim(e.id,''));const before=JSON.stringify(s);return !v.claim(e.id,'').success&&before===JSON.stringify(s);});
+ test('容量不足时幼犬进入等待安置',()=>{const s=fresh();s.facilities.nursery.capacity=1;s.facilities.computer.capacity=1;s.activeAnimals.DOG00002.location='computer';const {v,advance}=setup(s);const e=ok(v.breed('DOG00001','DOG00002')).egg;advance(DAY);return ok(v.claim(e.id,'')).puppy.location==='pending';});
+ test('正式编号避开永久档案中的已用编号',()=>{const s=fresh();s.pedigreeRecords.DOG00003={id:'DOG00003'};const {v}=setup(s);return ok(v.breed('DOG00001','DOG00002')).egg.offspringId==='DOG00004';});
+ test('产蛋写入失败回滚编号和亲本状态',()=>{const s=fresh(),before=JSON.stringify(s);const v=createFormalBreeding({state:s,persist:()=>{throw Error('写入失败');},now:()=>T});return !v.breed('DOG00001','DOG00002').success&&JSON.stringify(s)===before;});
+ test('领取写入失败保留犬蛋',()=>{const {s,v}=setup();const e=ok(v.breed('DOG00001','DOG00002')).egg;const before=JSON.stringify(s);const w=createFormalBreeding({state:s,persist:()=>false,now:()=>T+DAY});return !w.claim(e.id,'').success&&JSON.stringify(s)===before;});
+ test('旧标签页写入被拦截',()=>{const disk=memory(),a=createSaveStore(disk),b=createSaveStore(disk);a.save(fresh());try{b.save(fresh());}catch{return true;}return false;});
+ test('损坏存档读取失败不清空',()=>{const disk=memory();disk.setItem('dogbreedsim:save','{bad');try{createSaveStore(disk).load();}catch{return disk.getItem('dogbreedsim:save')==='{bad';}return false;});
+ return results;
+}

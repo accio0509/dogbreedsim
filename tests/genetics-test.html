@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>外貌遗传回归测试</title>
+
+    <style>
+        body {
+            background: #f3f5f2;
+            color: #303a32;
+            font-family: "Microsoft YaHei", sans-serif;
+            padding: 24px;
+            max-width: 1000px;
+            margin: auto;
+        }
+
+        section {
+            background: white;
+            padding: 18px;
+            margin: 12px 0;
+            border: 1px solid #dce3dc;
+            border-radius: 8px;
+        }
+
+        .pass {
+            color: #38764c;
+        }
+
+        .fail {
+            color: #b94a48;
+        }
+
+        button {
+            background: #52765b;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        h3 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>外貌遗传引擎回归测试</h1>
+
+<button id="run">重新运行测试</button>
+
+<h2 id="summary">准备测试</h2>
+
+<div id="results"></div>
+
+<script type="module">
+
+import {
+    getAllBreeds,
+    getBreedAppearance
+} from "../data/species/dog/breeds.js";
+
+import {
+    APPEARANCE_LOCI
+} from "../data/species/dog/appearance.js";
+
+import {
+    createAnimal
+} from "../engine/animal.js";
+
+import {
+    createAllele,
+    generateAllele,
+    generateGenotype,
+    validateGenotype,
+    calculatePhenotype,
+    inheritGenotype,
+    getAllowedAlleles,
+    getRareAlleles,
+    hasMutation,
+    hasVisibleMutation,
+    getMutationRecords,
+    isHomozygous,
+    isHeterozygous
+} from "../engine/genetics.js";
+
+
+const N = 10000;
+
+let passed = 0;
+
+let failed = 0;
+
+const results =
+    document.getElementById("results");
+
+
+function assert(condition, message) {
+
+    if (!condition) {
+        throw new Error(message);
+    }
+
+}
+
+
+function near(actual, expected, tolerance = 0.025) {
+
+    assert(
+
+        Math.abs(actual - expected) <= tolerance,
+
+        `实际 ${actual}，预期 ${expected}`
+
+    );
+
+}
+
+
+function pct(value) {
+
+    return (value * 100).toFixed(2) + "%";
+
+}
+
+
+function test(title, fn) {
+
+    const panel =
+        document.createElement("section");
+
+    const heading =
+        document.createElement("h3");
+
+    const content =
+        document.createElement("pre");
+
+    try {
+
+        const detail = fn();
+
+        heading.className = "pass";
+
+        heading.textContent = "✓ " + title;
+
+        content.textContent = detail ?? "通过";
+
+        passed++;
+
+    } catch (error) {
+
+        heading.className = "fail";
+
+        heading.textContent = "✗ " + title;
+
+        content.textContent =
+            error.stack ?? error.message;
+
+        failed++;
+
+        console.error(error);
+
+    }
+
+    panel.append(heading, content);
+
+    results.appendChild(panel);
+
+}
+
+
+function parents() {
+
+    const mother = createAnimal({
+
+        id: "MOTHER",
+        breedId: "corgi",
+        sex: "female",
+        stage: "adult"
+
+    });
+
+    const father = createAnimal({
+
+        id: "FATHER",
+        breedId: "corgi",
+        sex: "male",
+        stage: "adult"
+
+    });
+
+    for (const animal of [mother, father]) {
+
+        animal.genotype.coatColor = [
+
+            createAllele("C001"),
+            createAllele("C003")
+
+        ];
+
+    }
+
+    return { mother, father };
+
+}
+
+
+function runAll() {
+
+    results.innerHTML = "";
+
+    passed = 0;
+
+    failed = 0;
+
+
+    // 01 基因型结构
+
+    test("01 基因型结构", () => {
+
+        let count = 0;
+
+        for (const breed of getAllBreeds()) {
+
+            for (let i = 0; i < 100; i++) {
+
+                const g = generateGenotype(
+                    breed.id
+                );
+
+                assert(
+                    validateGenotype(g),
+                    "非法基因型"
+                );
+
+                assert(
+                    Object.keys(g).length === 5,
+                    "位点数量错误"
+                );
+
+                count++;
+
+            }
+
+        }
+
+        return `成功生成 ${count} 组完整基因型。`;
+
+    });
+
+
+    // 02 普通色与稀有色
+
+    test("02 普通色与稀有色概率", () => {
+
+        const pool = getBreedAppearance(
+            "chihuahua"
+        ).coatColor;
+
+        const rare = getRareAlleles(
+            pool,
+            "coatColor"
+        );
+
+        const rows = [];
+
+        for (const source of [
+
+            "starter",
+            "market",
+            "exploration",
+            "competition"
+
+        ]) {
+
+            let count = 0;
+
+            for (let i = 0; i < N; i++) {
+
+                const a = generateAllele(
+                    pool,
+                    "coatColor",
+                    source
+                );
+
+                if (rare.includes(a.allele)) {
+                    count++;
+                }
+
+                assert(
+                    !a.mutated,
+                    "随机出现突变"
+                );
+
+            }
+
+            const expected =
+
+                ["market", "exploration"]
+                    .includes(source)
+
+                ? 0.2
+
+                : rare.length /
+                    getAllowedAlleles(
+                        pool,
+                        "coatColor"
+                    ).length;
+
+            near(count / N, expected);
+
+            rows.push(
+
+                `${source}：稀有色 ${pct(count / N)}` +
+
+                `，预期 ${pct(expected)}`
+
+            );
+
+        }
+
+        return rows.join("\n");
+
+    });
+
+
+    // 03 犬只来源传递
+
+    test("03 犬只来源传递", () => {
+
+        const pool = getBreedAppearance(
+            "chihuahua"
+        ).coatColor;
+
+        const rare = getRareAlleles(
+            pool,
+            "coatColor"
+        );
+
+        const rows = [];
+
+        for (const source of [
+
+            "market",
+            "exploration"
+
+        ]) {
+
+            let count = 0;
+
+            for (let i = 0; i < 3000; i++) {
+
+                const animal = createAnimal({
+
+                    id: "TEST" + i,
+
+                    breedId: "chihuahua",
+
+                    source
+
+                });
+
+                for (
+                    const a of
+                    animal.genotype.coatColor
+                ) {
+
+                    if (rare.includes(a.allele)) {
+                        count++;
+                    }
+
+                }
+
+            }
+
+            near(count / 6000, 0.2);
+
+            rows.push(
+
+                `${source}：${pct(count / 6000)}`
+
+            );
+
+        }
+
+        return rows.join("\n");
+
+    });
+
+
+    // 04 孟德尔遗传
+
+    test("04 孟德尔遗传", () => {
+
+        const { mother, father } = parents();
+
+        const counts = [0, 0, 0];
+
+        let black = 0;
+
+        for (let i = 0; i < N; i++) {
+
+            const g = inheritGenotype(
+                mother,
+                father
+            );
+
+            const alleles =
+                g.coatColor.map(a => a.allele);
+
+            const n = alleles.filter(
+                a => a === "C001"
+            ).length;
+
+            counts[n]++;
+
+            if (
+                calculatePhenotype(g)
+                    .coatColor.allele === "C001"
+            ) {
+                black++;
+            }
+
+        }
+
+        near(counts[0] / N, 0.25);
+
+        near(counts[1] / N, 0.50);
+
+        near(counts[2] / N, 0.25);
+
+        near(black / N, 0.75);
+
+        return [
+
+            `金色纯合：${pct(counts[0] / N)}`,
+
+            `杂合：${pct(counts[1] / N)}`,
+
+            `黑色纯合：${pct(counts[2] / N)}`,
+
+            `黑色表现型：${pct(black / N)}`
+
+        ].join("\n");
+
+    });
+
+
+    // 05 跨犬种修正
+
+    test("05 跨犬种基因修正", () => {
+
+        const mother = createAnimal({
+
+            id: "GM",
+            breedId: "golden_retriever",
+            sex: "female",
+            stage: "adult"
+
+        });
+
+        const father = createAnimal({
+
+            id: "CF",
+            breedId: "chihuahua",
+            sex: "male",
+            stage: "adult"
+
+        });
+
+        father.genotype.coatColor = [
+
+            createAllele("C001"),
+            createAllele("C001")
+
+        ];
+
+        const pools = getBreedAppearance(
+            mother.breedId
+        );
+
+        const allowedCoat = getAllowedAlleles(
+            pools.coatColor,
+            "coatColor"
+        );
+
+        const counts = Object.fromEntries(
+
+            allowedCoat.map(
+                id => [id, 0]
+            )
+
+        );
+
+        for (let i = 0; i < N; i++) {
+
+            const g = inheritGenotype(
+                mother,
+                father
+            );
+
+            for (
+                const locus of
+                Object.keys(APPEARANCE_LOCI)
+            ) {
+
+                const allowed = getAllowedAlleles(
+                    pools[locus],
+                    locus
+                );
+
+                for (const a of g[locus]) {
+
+                    assert(
+                        allowed.includes(a.allele),
+                        "出现非法跨犬种基因"
+                    );
+
+                }
+
+            }
+
+            counts[g.coatColor[1].allele]++;
+
+        }
+
+        for (const count of Object.values(counts)) {
+
+            near(
+                count / N,
+                1 / allowedCoat.length
+            );
+
+        }
+
+        return Object.entries(counts)
+
+            .map(([id, count]) =>
+
+                `${id}：${pct(count / N)}`
+
+            )
+
+            .join("\n");
+
+    });
+
+
+    // 06 隐性突变遗传
+
+    test("06 已有突变基因传递", () => {
+
+        const { mother, father } = parents();
+
+        father.genotype.coatColor = [
+
+            createAllele(
+                "C12",
+                true,
+                "ORIGIN"
+            ),
+
+            createAllele("C001")
+
+        ];
+
+        let carriers = 0;
+
+        for (let i = 0; i < N; i++) {
+
+            const g = inheritGenotype(
+                mother,
+                father
+            );
+
+            if (hasMutation(g)) {
+
+                carriers++;
+
+                const records =
+                    getMutationRecords(g);
+
+                assert(
+                    records.length === 1,
+                    "突变数量错误"
+                );
+
+                assert(
+
+                    records[0].mutationOrigin
+                        === "ORIGIN",
+
+                    "突变来源丢失"
+
+                );
+
+            }
+
+            assert(
+
+                !hasVisibleMutation(
+                    calculatePhenotype(g)
+                ),
+
+                "浅雾紫不应压过黑色或金色"
+
+            );
+
+        }
+
+        near(carriers / N, 0.5);
+
+        const pure = structuredClone(
+            mother.genotype
+        );
+
+        pure.coatColor = [
+
+            createAllele("C12", true, "ORIGIN"),
+
+            createAllele("C12", true, "ORIGIN")
+
+        ];
+
+        assert(
+
+            hasVisibleMutation(
+                calculatePhenotype(pure)
+            ),
+
+            "突变纯合未表现"
+
+        );
+
+        return (
+
+            `隐性突变携带率：${pct(carriers / N)}\n` +
+
+            "突变来源及纯合表现正常。"
+
+        );
+
+    });
+
+
+    // 07 禁止随机生成突变
+
+    test("07 禁止随机生成专属突变色", () => {
+
+        let count = 0;
+
+        for (const breed of getAllBreeds()) {
+
+            for (const source of [
+
+                "starter",
+                "market",
+                "exploration",
+                "competition"
+
+            ]) {
+
+                for (let i = 0; i < 500; i++) {
+
+                    const g = generateGenotype(
+                        breed.id,
+                        source
+                    );
+
+                    assert(
+                        !hasMutation(g),
+                        "随机出现突变"
+                    );
+
+                    const pools =
+                        getBreedAppearance(breed.id);
+
+                    for (
+                        const locus of
+                        Object.keys(APPEARANCE_LOCI)
+                    ) {
+
+                        const allowed = getAllowedAlleles(
+                            pools[locus],
+                            locus
+                        );
+
+                        assert(
+
+                            g[locus].every(a =>
+                                allowed.includes(a.allele)
+                            ),
+
+                            "存在非法常规基因"
+
+                        );
+
+                    }
+
+                    count++;
+
+                }
+
+            }
+
+        }
+
+        return `生成 ${count} 组基因型，无非法基因。`;
+
+    });
+
+
+    // 08 数据独立性
+
+    test("08 基因数据独立性", () => {
+
+        const { mother, father } = parents();
+
+        const before = JSON.stringify(
+            [mother.genotype, father.genotype]
+        );
+
+        const child = inheritGenotype(
+            mother,
+            father
+        );
+
+        child.coatColor[0].allele = "C002";
+
+        assert(
+
+            before === JSON.stringify(
+                [mother.genotype, father.genotype]
+            ),
+
+            "修改后代影响亲本"
+
+        );
+
+        return "亲本与后代数据相互独立。";
+
+    });
+
+
+    // 09 纯合杂合
+
+    test("09 纯合与杂合", () => {
+
+        const { mother } = parents();
+
+        assert(
+
+            isHeterozygous(
+                mother.genotype,
+                "coatColor"
+            ),
+
+            "杂合判断错误"
+
+        );
+
+        mother.genotype.coatColor = [
+
+            createAllele("C001"),
+
+            createAllele("C001")
+
+        ];
+
+        assert(
+
+            isHomozygous(
+                mother.genotype,
+                "coatColor"
+            ),
+
+            "纯合判断错误"
+
+        );
+
+        return "纯合、杂合判断正常。";
+
+    });
+
+
+    // 10 隐藏花纹
+
+    test("10 隐藏花纹", () => {
+
+        const g = generateGenotype(
+            "corgi"
+        );
+
+        g.pattern = [
+
+            createAllele("P004"),
+            createAllele("P004")
+
+        ];
+
+        g.patternColor = [
+
+            createAllele("M12", true, "ORIGIN"),
+            createAllele("M12", true, "ORIGIN")
+
+        ];
+
+        const p = calculatePhenotype(g);
+
+        assert(
+            !p.patternVisible,
+            "纯色错误显示花纹"
+        );
+
+        assert(
+            hasMutation(g),
+            "隐藏突变丢失"
+        );
+
+        assert(
+            !hasVisibleMutation(p),
+            "隐藏突变错误显示"
+        );
+
+        g.pattern = [
+
+            createAllele("P002"),
+            createAllele("P002")
+
+        ];
+
+        g.coatColor = [
+
+            createAllele("C001"),
+            createAllele("C001")
+
+        ];
+
+        g.patternColor = [
+
+            createAllele("M001"),
+            createAllele("M001")
+
+        ];
+
+        assert(
+
+            !calculatePhenotype(g).patternVisible,
+
+            "同色花纹错误显示"
+
+        );
+
+        return "纯色、隐藏突变及同色花纹正常。";
+
+    });
+
+
+    // 11 空稀有基因池
+
+    test("11 空稀有基因池", () => {
+
+        const pool = {
+
+            normal: ["C001", "C002"],
+
+            rare: [],
+
+            mutation: ["C12"]
+
+        };
+
+        for (let i = 0; i < 1000; i++) {
+
+            const a = generateAllele(
+
+                pool,
+                "coatColor",
+                "market"
+
+            );
+
+            assert(
+
+                pool.normal.includes(a.allele),
+
+                "空稀有池处理失败"
+
+            );
+
+        }
+
+        return "无稀有色时自动从普通池抽取。";
+
+    });
+
+
+    // 12 繁育来源保护
+
+    test("12 繁育来源保护", () => {
+
+        let rejected = false;
+
+        try {
+
+            generateGenotype(
+                "corgi",
+                "breeding"
+            );
+
+        } catch {
+
+            rejected = true;
+
+        }
+
+        assert(
+            rejected,
+            "繁育来源不应随机生成"
+        );
+
+        const { mother, father } = parents();
+
+        const g = inheritGenotype(
+            mother,
+            father
+        );
+
+        const child = createAnimal({
+
+            id: "CHILD",
+
+            breedId: mother.breedId,
+
+            source: "breeding",
+
+            genotype: g
+
+        });
+
+        assert(
+
+            JSON.stringify(child.genotype)
+                === JSON.stringify(g),
+
+            "遗传基因型被重新生成"
+
+        );
+
+        return "正确拒绝随机繁育，保留遗传基因型。";
+
+    });
+
+
+    const summary =
+        document.getElementById("summary");
+
+    summary.textContent =
+
+        `${passed}/${passed + failed} 项测试通过`;
+
+    summary.className =
+        failed === 0 ? "pass" : "fail";
+
+}
+
+
+document.getElementById("run")
+
+    .addEventListener("click", runAll);
+
+
+runAll();
+
+</script>
+
+</body>
+</html>

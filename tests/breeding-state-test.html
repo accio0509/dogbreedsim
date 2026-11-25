@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>V0.4.0 繁育状态测试</title>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 24px;
+            background: #f5f5f5;
+        }
+
+        #results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            line-height: 1.8;
+        }
+
+        .pass { color: #27834b; }
+        .fail { color: #c0392b; }
+    </style>
+</head>
+
+<body>
+    <h1>V0.4.0 繁育状态测试</h1>
+    <p>第一阶段：繁育次数、冷却时间与旧数据兼容</p>
+
+    <div id="results"></div>
+
+    <script type="module">
+        import {
+            getRemainingBreedings,
+            getRemainingCooldown
+        } from "../engine/breeding.js";
+
+        const HOUR = 60 * 60 * 1000;
+        const DAY = 24 * HOUR;
+        const NOW = Date.now();
+
+        const results = document.querySelector("#results");
+
+        let passed = 0;
+        let failed = 0;
+
+        function test(name, fn) {
+            const row = document.createElement("div");
+
+            try {
+                if (!fn()) {
+                    throw new Error("结果不符合预期");
+                }
+
+                row.className = "pass";
+                row.textContent = "✓ " + name;
+                passed++;
+
+            } catch (error) {
+                row.className = "fail";
+                row.textContent =
+                    "✗ " + name + "：" + error.message;
+                failed++;
+            }
+
+            results.appendChild(row);
+        }
+
+        function createFixture(count = 0, lastSuccessAt = null) {
+            return {
+                id: "DOG99999",
+                species: "dog",
+                stage: "adult",
+                location: "nursery",
+                activity: null,
+                breeding: {
+                    count,
+                    lastSuccessAt
+                }
+            };
+        }
+
+        test("初始剩余繁育次数为10", () => {
+            return getRemainingBreedings(
+                createFixture()
+            ) === 10;
+        });
+
+        test("繁育1次后剩余9次", () => {
+            return getRemainingBreedings(
+                createFixture(1, NOW)
+            ) === 9;
+        });
+
+        test("繁育9次后剩余1次", () => {
+            return getRemainingBreedings(
+                createFixture(9, NOW)
+            ) === 1;
+        });
+
+        test("繁育10次后剩余0次", () => {
+            return getRemainingBreedings(
+                createFixture(10, NOW)
+            ) === 0;
+        });
+
+        test("剩余繁育次数不会为负数", () => {
+            return getRemainingBreedings(
+                createFixture(11, NOW)
+            ) === 0;
+        });
+
+        test("未繁育犬只没有冷却", () => {
+            return getRemainingCooldown(
+                createFixture(), NOW
+            ) === 0;
+        });
+
+        test("成功繁育后冷却为24小时", () => {
+            return getRemainingCooldown(
+                createFixture(1, NOW), NOW
+            ) === DAY;
+        });
+
+        test("经过1小时后剩余23小时", () => {
+            return getRemainingCooldown(
+                createFixture(1, NOW),
+                NOW + HOUR
+            ) === 23 * HOUR;
+        });
+
+        test("经过23小时后剩余1小时", () => {
+            return getRemainingCooldown(
+                createFixture(1, NOW),
+                NOW + 23 * HOUR
+            ) === HOUR;
+        });
+
+        test("满24小时后冷却结束", () => {
+            return getRemainingCooldown(
+                createFixture(1, NOW),
+                NOW + DAY
+            ) === 0;
+        });
+
+        test("超过24小时不会出现负数冷却", () => {
+            return getRemainingCooldown(
+                createFixture(1, NOW),
+                NOW + 48 * HOUR
+            ) === 0;
+        });
+
+        test("旧犬只缺少繁育字段时仍可读取次数", () => {
+            const dog = createFixture();
+            delete dog.breeding;
+
+            return getRemainingBreedings(dog) === 10;
+        });
+
+        test("旧犬只缺少繁育字段时没有冷却", () => {
+            const dog = createFixture();
+            delete dog.breeding;
+
+            return getRemainingCooldown(dog, NOW) === 0;
+        });
+
+        const summary = document.createElement("h2");
+
+        summary.textContent =
+            `测试完成：${passed} 项通过，${failed} 项失败`;
+
+        summary.className = failed === 0 ? "pass" : "fail";
+
+        results.appendChild(summary);
+    </script>
+</body>
+</html>

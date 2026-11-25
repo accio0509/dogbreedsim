@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>V0.3.0 综合遗传测试</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: auto;
+            max-width: 1000px;
+            padding: 24px;
+            background: #f3f5f2;
+            color: #303a32;
+            font: 14px "Microsoft YaHei", sans-serif;
+        }
+
+        section {
+            background: white;
+            padding: 18px;
+            margin: 12px 0;
+            border: 1px solid #dce3dc;
+            border-radius: 8px;
+        }
+
+        h3 {
+            margin-top: 0;
+        }
+
+        button {
+            padding: 10px 18px;
+            background: #52765b;
+            color: white;
+            border: 0;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #42634b;
+        }
+
+        .pass {
+            color: #38764c;
+        }
+
+        .fail {
+            color: #b94a48;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>V0.3.0 综合遗传测试</h1>
+
+<p>
+    验证全部遗传模块、批量模拟、
+    连续世代和CSV数据导出。
+</p>
+
+<button id="run">重新运行测试</button>
+
+<h2 id="summary">准备测试……</h2>
+
+<div id="results"></div>
+
+<script type="module">
+
+import {
+    GAME_CONFIG
+} from "../config/game.js";
+
+import {
+    APPEARANCE_LOCI
+} from "../data/species/dog/appearance.js";
+
+import {
+    getAllBreeds,
+    getBreedAppearance,
+    getBreed,
+    SIZE_CLASSES
+} from "../data/species/dog/breeds.js";
+
+import {
+    createAnimal,
+    calculateAdultWeight
+} from "../engine/animal.js";
+
+import {
+    createAllele,
+    calculatePhenotype,
+    getAllowedAlleles,
+    validateGenotype,
+    getMutationRecords
+} from "../engine/genetics.js";
+
+import {
+    validateIV
+} from "../engine/inheritance.js";
+
+import {
+    STAT_KEYS,
+    calculateTotal,
+    calculateStats
+} from "../engine/stats.js";
+
+import {
+    checkBreedingPair,
+    recordSuccessfulBreeding
+} from "../engine/breeding.js";
+
+import {
+    generateOffspringData,
+    createOffspringFromData
+} from "../engine/offspring.js";
+
+import {
+    calculateInbreedingCoefficient
+} from "../engine/kinship.js";
+
+import {
+    simulateBreeding,
+    offspringToCSV
+} from "../engine/simulation.js";
+
+
+// ==========================================
+// 基础测试工具
+// ==========================================
+
+let passed = 0;
+let failed = 0;
+let nextId = 1;
+
+const $ = id => document.getElementById(id);
+
+const NOW = 1800000000000;
+
+
+function assert(condition, message) {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
+
+function near(actual, expected, tolerance = 1e-9) {
+    assert(
+        Math.abs(actual - expected) <= tolerance,
+        `实际 ${actual}，预期 ${expected}`
+    );
+}
+
+
+function sum(counter) {
+    return Object.values(counter)
+        .reduce((a, b) => a + b, 0);
+}
+
+
+function expectError(fn) {
+    let rejected = false;
+
+    try {
+        fn();
+    } catch {
+        rejected = true;
+    }
+
+    assert(
+        rejected,
+        "非法操作未被拒绝。"
+    );
+}
+
+
+function id() {
+    return "TEST_" + nextId++;
+}
+
+
+function founder(breedId, sex, options = {}) {
+    return createAnimal({
+        id: id(),
+        breedId,
+        sex,
+        stage: "adult",
+        ...options
+    });
+}
+
+
+function parents() {
+    return {
+        mother: founder("corgi", "female"),
+        father: founder("corgi", "male")
+    };
+}
+
+
+function adultChild(data, sex) {
+    return createAnimal({
+        ...data,
+        sex,
+        stage: "adult",
+        location: "nursery"
+    });
+}
+
+
+function save(records, animal) {
+    records[animal.id] = structuredClone(animal);
+}
+
+
+function runTest(title, fn) {
+    const section =
+        document.createElement("section");
+
+    const heading =
+        document.createElement("h3");
+
+    const content =
+        document.createElement("pre");
+
+    try {
+        content.textContent = fn() ?? "通过";
+
+        heading.textContent = "✓ " + title;
+        heading.className = "pass";
+
+        passed++;
+
+    } catch (error) {
+        content.textContent =
+            error.stack ?? error.message;
+
+        heading.textContent = "✗ " + title;
+        heading.className = "fail";
+
+        failed++;
+
+        console.error(title, error);
+    }
+
+    section.append(heading, content);
+
+    $("results").appendChild(section);
+}
+
+
+// ==========================================
+// 01 所有合法跨犬种组合
+// ==========================================
+
+function testAllBreedPairs() {
+    let allowed = 0;
+    let rejected = 0;
+    let generated = 0;
+
+    for (const m of getAllBreeds()) {
+        for (const f of getAllBreeds()) {
+
+            const mother = founder(
+                m.id, "female"
+            );
+
+            const father = founder(
+                f.id, "male"
+            );
+
+            const expected =
+                SIZE_CLASSES[f.size].rank <=
+                SIZE_CLASSES[m.size].rank;
+
+            const eligibility = checkBreedingPair(
+                mother,
+                father,
+                {},
+                NOW
+            );
+
+            assert(
+                eligibility.success === expected,
+                "犬种体型资格不一致。"
+            );
+
+            if (!expected) {
+                rejected++;
+                continue;
+            }
+
+            allowed++;
+
+            const result = simulateBreeding(
+                mother,
+                father,
+                {},
+                {
+                    count: 100,
+                    now: NOW,
+                    idPrefix: id()
+                }
+            );
+
+            for (const child of result.offspring) {
+
+                assert(
+                    child.breedId === mother.breedId,
+                    "后代犬种错误。"
+                );
+
+                validateGenotype(child.genotype);
+                validateIV(child.iv);
+
+                const pools =
+                    getBreedAppearance(child.breedId);
+
+                for (
+                    const locus of
+                    Object.keys(APPEARANCE_LOCI)
+                ) {
+
+                    const allowedAlleles =
+                        getAllowedAlleles(
+                            pools[locus],
+                            locus
+                        );
+
+                    for (
+                        const allele of
+                        child.genotype[locus]
+                    ) {
+
+                        assert(
+                            allele.mutated ||
+                            allowedAlleles.includes(
+                                allele.allele
+                            ),
+                            "后代出现非法常规基因。"
+                        );
+
+                    }
+                }
+
+                generated++;
+            }
+        }
+    }
+
+    return [
+        `允许组合：${allowed}`,
+        `禁止组合：${rejected}`,
+        `成功生成后代：${generated}`
+    ].join("\n");
+}
+
+
+// ==========================================
+// 02 批量模拟统计完整性
+// ==========================================
+
+function testStatistics() {
+
+    const {
+        mother,
+        father
+    } = parents();
+
+    const n = 1000;
+
+    const result = simulateBreeding(
+        mother,
+        father,
+        {},
+        {
+            count: n,
+            idPrefix: id(),
+            now: NOW
+        }
+    );
+
+    const s = result.statistics;
+
+    assert(
+        s.total === n,
+        "样本总量错误。"
+    );
+
+    assert(
+        result.offspring.length === n,
+        "后代数组长度错误。"
+    );
+
+    assert(
+        sum(s.sex) === n,
+        "性别统计错误。"
+    );
+
+    assert(
+        sum(s.breed) === n,
+        "犬种统计错误。"
+    );
+
+    assert(
+        sum(s.personality) === n,
+        "性格统计错误。"
+    );
+
+    assert(
+        sum(s.iv.histogram) === n,
+        "IV直方图统计错误。"
+    );
+
+    for (
+        const locus of
+        Object.keys(APPEARANCE_LOCI)
+    ) {
+
+        assert(
+            sum(s.appearance[locus]) === n,
+            `${locus} 表现型统计错误。`
+        );
+
+        assert(
+            sum(s.genotype[locus]) === n,
+            `${locus} 基因型统计错误。`
+        );
+    }
+
+    return "全部分类统计均与样本总数一致。";
+}
+
+
+// ==========================================
+// 03 模拟过程不修改亲本
+// ==========================================
+
+function testSimulationIsolation() {
+
+    const {
+        mother,
+        father
+    } = parents();
+
+    const records = {};
+
+    save(records, mother);
+    save(records, father);
+
+    const before = JSON.stringify([
+        mother,
+        father,
+        records
+    ]);
+
+    const result = simulateBreeding(
+        mother,
+        father,
+        records,
+        {
+            count: 1000,
+            idPrefix: id(),
+            now: NOW
+        }
+    );
+
+    // 故意修改模拟后代的数据
+    result.offspring[0].iv.STR = 99;
+
+    result.offspring[0]
+        .genotype.coatColor[0]
+        .allele = "INVALID";
+
+    assert(
+        JSON.stringify([
+            mother,
+            father,
+            records
+        ]) === before,
+
+        "模拟修改了亲本或原始档案。"
+    );
+
+    return "模拟完全独立，不扣次数，不修改亲本。";
+}
+
+
+// ==========================================
+// 04 突变统计之间的逻辑关系
+// ==========================================
+
+function testMutationStatistics() {
+
+    const {
+        mother,
+        father
+    } = parents();
+
+    const result = simulateBreeding(
+        mother,
+        father,
+        {},
+        {
+            count: 10000,
+            idPrefix: id(),
+            now: NOW
+        }
+    );
+
+    const s = result.statistics;
+
+    const m = s.mutation;
+
+    near(
+        m.triggered / s.total,
+        GAME_CONFIG.breeding.sameBreed.mutationRate,
+        0.015
+    );
+
+    assert(
+        m.newMutation === m.triggered,
+        "无突变亲本出现重复突变判定。"
+    );
+
+    assert(
+        m.carriers === m.newMutation,
+        "无突变亲本的携带率错误。"
+    );
+
+    assert(
+        m.visible + m.hidden === m.carriers,
+        "可见与隐藏突变数量错误。"
+    );
+
+    assert(
+        sum(m.loci) === m.newMutation,
+        "突变位点统计错误。"
+    );
+
+    return [
+        `样本数：${s.total}`,
+
+        `新突变率：${
+            (
+                m.newMutation / s.total * 100
+            ).toFixed(2)
+        }%`,
+
+        `携带突变：${m.carriers}`,
+
+        `可见突变：${m.visible}`,
+
+        `隐藏突变：${m.hidden}`
+
+    ].join("\n");
+}
+
+
+// ==========================================
+// 05 个体值遗传的总体均值
+// ==========================================
+
+function testIVMean() {
+
+    const highIV = Object.fromEntries(
+        STAT_KEYS.map(key => [key, 10])
+    );
+
+    const mother = founder(
+        "corgi",
+        "female",
+        {
+            iv: highIV
+        }
+    );
+
+    const father = founder(
+        "corgi",
+        "male",
+        {
+            iv: highIV
+        }
+    );
+
+    const result = simulateBreeding(
+        mother,
+        father,
+        {},
+        {
+            count: 5000,
+            idPrefix: id(),
+            now: NOW
+        }
+    );
+
+    // 三项固定为10，其余三项平均为5
+    // 理论总IV均值为45
+
+    near(
+        result.statistics.iv.average,
+        45,
+        0.35
+    );
+
+    for (const child of result.offspring) {
+
+        const total =
+            calculateTotal(child.iv);
+
+        assert(
+            total >= 30 && total <= 60,
+            "双满IV亲本后代总IV超出范围。"
+        );
+    }
+
+    return (
+        "双满IV亲本后代理论均值45，实际：" +
+        result.statistics.iv.average.toFixed(3)
+    );
+}
+
+
+// ==========================================
+// 06 近交惩罚统计
+// ==========================================
+
+function testInbreedingStatistics() {
+
+    const {
+        mother: A,
+        father: B
+    } = parents();
+
+    const records = {};
+
+    save(records, A);
+    save(records, B);
+
+    const C = adultChild(
+        generateOffspringData(
+            A,
+            B,
+            id(),
+            records
+        ),
+        "female"
+    );
+
+    const D = adultChild(
+        generateOffspringData(
+            A,
+            B,
+            id(),
+            records
+        ),
+        "male"
+    );
+
+    save(records, C);
+    save(records, D);
+
+    const result = simulateBreeding(
+        C,
+        D,
+        records,
+        {
+            count: 1000,
+            idPrefix: id(),
+            now: NOW
+        }
+    );
+
+    const s = result.statistics;
+
+    near(
+        s.inbreeding.coefficient,
+        0.25
+    );
+
+    near(
+        s.inbreeding.penalty,
+        0.10
+    );
+
+    let actualLoss = 0;
+
+    for (const child of result.offspring) {
+
+        const record =
+            child.inheritance.inbreeding;
+
+        for (const key of STAT_KEYS) {
+
+            const expected = Math.floor(
+                record.originalIV[key] * 0.9
+            );
+
+            assert(
+                child.iv[key] === expected,
+                "实际近交惩罚错误。"
+            );
+
+            actualLoss +=
+                record.originalIV[key] -
+                child.iv[key];
+        }
+    }
+
+    assert(
+        actualLoss ===
+        s.inbreeding.totalIVLoss,
+
+        "近交损失统计错误。"
+    );
+
+    return [
+        "全同胞F = 25%",
+
+        "IV惩罚 = 10%",
+
+        `平均IV损失：${
+            s.inbreeding.averageIVLoss.toFixed(2)
+        }`
+
+    ].join("\n");
+}
+
+
+// ==========================================
+// 07 多代连续回交
+// ==========================================
+
+function testMultiGeneration() {
+
+    let {
+        mother,
+        father
+    } = parents();
+
+    const records = {};
+
+    save(records, mother);
+    save(records, father);
+
+    let previousF = 0;
+
+    const lines = [];
+
+    for (let i = 1; i <= 20; i++) {
+
+        const data = generateOffspringData(
+            mother,
+            father,
+            id(),
+            records
+        );
+
+        const f =
+            data.pedigree.inbreedingCoefficient;
+
+        // 固定使用同一公犬进行连续回交
+        const expected =
+            0.5 * (1 - 0.5 ** (i - 1));
+
+        near(f, expected);
+
+        assert(
+            f >= previousF && f <= 1,
+            "连续回交系数非法。"
+        );
+
+        validateGenotype(data.genotype);
+        validateIV(data.iv);
+
+        const child = adultChild(
+            data,
+            "female"
+        );
+
+        save(records, child);
+
+        mother = child;
+
+        previousF = f;
+
+        lines.push(
+            `第${i}轮：F = ${
+                (f * 100).toFixed(4)
+            }%`
+        );
+    }
+
+    return lines.join("\n");
+}
+
+
+// ==========================================
+// 08 突变来源跨世代保存
+// ==========================================
+
+function testMutationOrigin() {
+
+    let {
+        mother,
+        father
+    } = parents();
+
+    const origin = mother.id;
+
+    mother.genotype.coatColor = [
+        createAllele(
+            "C12",
+            true,
+            origin
+        ),
+
+        createAllele(
+            "C12",
+            true,
+            origin
+        )
+    ];
+
+    father.genotype.coatColor = [
+        createAllele(
+            "C12",
+            true,
+            origin
+        ),
+
+        createAllele(
+            "C12",
+            true,
+            origin
+        )
+    ];
+
+    const records = {};
+
+    save(records, mother);
+    save(records, father);
+
+    for (let i = 0; i < 10; i++) {
+
+        const data = generateOffspringData(
+            mother,
+            father,
+            id(),
+            records
+        );
+
+        assert(
+            calculatePhenotype(data.genotype)
+                .coatColor.allele === "C12",
+
+            "突变纯合颜色丢失。"
+        );
+
+        const mutations = getMutationRecords(
+            data.genotype
+        ).filter(
+            record =>
+                record.locus === "coatColor"
+        );
+
+        assert(
+            mutations.length === 2,
+            "突变纯合基因数量错误。"
+        );
+
+        assert(
+            mutations.every(
+                record =>
+                    record.mutationOrigin === origin
+            ),
+            "突变来源丢失。"
+        );
+
+        mother = adultChild(
+            data,
+            "female"
+        );
+
+        save(records, mother);
+    }
+
+    return (
+        "连续10代浅雾紫纯合基因" +
+        "及突变来源完整保留。"
+    );
+}
+
+
+// ==========================================
+// 09 孵化和JSON序列化
+// ==========================================
+
+function testSerialization() {
+
+    const {
+        mother,
+        father
+    } = parents();
+
+    const data = generateOffspringData(
+        mother,
+        father,
+        id()
+    );
+
+    // 模拟存档与重新读取
+    const loaded = JSON.parse(
+        JSON.stringify(data)
+    );
+
+    const originalRandom = Math.random;
+
+    let child;
+
+    try {
+
+        // 禁止孵化过程中使用随机数
+        Math.random = () => {
+            throw new Error(
+                "孵化时发生随机重抽。"
+            );
+        };
+
+        child = createOffspringFromData(
+            loaded
+        );
+
+    } finally {
+
+        Math.random = originalRandom;
+
+    }
+
+    const fields = [
+        "id",
+        "name",
+        "breedId",
+        "sex",
+        "genotype",
+        "iv",
+        "personality",
+        "weightGene",
+        "pedigree",
+        "inheritance",
+        "mutationInfo"
+    ];
+
+    for (const field of fields) {
+
+        assert(
+            JSON.stringify(child[field]) ===
+            JSON.stringify(data[field]),
+
+            `${field} 数据不一致。`
+        );
+    }
+
+    assert(
+        child.stage === "puppy" &&
+        child.exp === 0 &&
+        calculateTotal(child.ev) === 0,
+
+        "幼犬初始属性错误。"
+    );
+
+    assert(
+        Object.values(
+            calculateStats(child)
+        ).every(Number.isFinite),
+
+        "幼犬实际能力值异常。"
+    );
+
+    const breed = getBreed(
+        child.breedId
+    );
+
+    const weight = calculateAdultWeight(
+        child
+    );
+
+    assert(
+        weight >= breed.weightRange.min &&
+        weight <= breed.weightRange.max,
+
+        "成年体重超出犬种范围。"
+    );
+
+    return (
+        "保存、重新读取及孵化" +
+        "均不改变遗传结果。"
+    );
+}
+
+
+// ==========================================
+// 10 后代编号及CSV导出
+// ==========================================
+
+function testCSV() {
+
+    const {
+        mother,
+        father
+    } = parents();
+
+    const result = simulateBreeding(
+        mother,
+        father,
+        {},
+        {
+            count: 100,
+            idPrefix: id(),
+            now: NOW
+        }
+    );
+
+    const ids = result.offspring.map(
+        child => child.id
+    );
+
+    assert(
+        new Set(ids).size === ids.length,
+        "批量后代编号重复。"
+    );
+
+    const csv = offspringToCSV(
+        result.offspring
+    );
+
+    assert(
+        csv.charCodeAt(0) === 0xFEFF,
+        "缺少UTF-8 BOM。"
+    );
+
+    const rows = csv.split("\r\n");
+
+    assert(
+        rows.length === 101,
+        "CSV行数错误。"
+    );
+
+    assert(
+        rows[0].includes("近交系数") &&
+        rows[0].includes("突变来源"),
+
+        "CSV缺少关键字段。"
+    );
+
+    for (const childId of ids) {
+
+        assert(
+            csv.includes(
+                '"' + childId + '"'
+            ),
+
+            "CSV缺少后代数据。"
+        );
+    }
+
+    return (
+        "100只后代编号唯一，" +
+        "CSV共101行（含表头）。"
+    );
+}
+
+
+// ==========================================
+// 11 繁育限制拦截
+// ==========================================
+
+function testRestrictions() {
+
+    const {
+        mother,
+        father
+    } = parents();
+
+    const options = {
+        count: 1,
+        idPrefix: id(),
+        now: NOW
+    };
+
+    // 禁止模拟0只
+    expectError(() =>
+        simulateBreeding(
+            mother,
+            father,
+            {},
+            {
+                ...options,
+                count: 0
+            }
+        )
+    );
+
+    // 禁止超过10000只
+    expectError(() =>
+        simulateBreeding(
+            mother,
+            father,
+            {},
+            {
+                ...options,
+                count: 10001
+            }
+        )
+    );
+
+    // 禁止幼犬繁育
+    mother.stage = "puppy";
+
+    expectError(() =>
+        simulateBreeding(
+            mother,
+            father,
+            {},
+            options
+        )
+    );
+
+    mother.stage = "adult";
+
+    // 禁止退役犬繁育
+    father.retired = true;
+
+    expectError(() =>
+        simulateBreeding(
+            mother,
+            father,
+            {},
+            options
+        )
+    );
+
+    father.retired = false;
+
+    // 禁止活动中的犬只繁育
+    father.activity = {
+        type: "training"
+    };
+
+    expectError(() =>
+        simulateBreeding(
+            mother,
+            father,
+            {},
+            options
+        )
+    );
+
+    father.activity = null;
+
+    // 记录一次成功产蛋
+    const success = recordSuccessfulBreeding(
+        mother,
+        father,
+        {},
+        NOW
+    );
+
+    assert(
+        success.success,
+        "无法记录繁育。"
+    );
+
+    // 禁止冷却期间再次繁育
+    expectError(() =>
+        simulateBreeding(
+            mother,
+            father,
+            {},
+            options
+        )
+    );
+
+    return (
+        "样本数量、未成年、退役、" +
+        "活动和冷却均能正确拦截。"
+    );
+}
+
+
+// ==========================================
+// 12 缺失祖先及编号冲突
+// ==========================================
+
+function testInvalidFamily() {
+
+    const {
+        mother: A,
+        father: B
+    } = parents();
+
+    const records = {};
+
+    save(records, A);
+    save(records, B);
+
+    const C = adultChild(
+        generateOffspringData(
+            A,
+            B,
+            id(),
+            records
+        ),
+        "female"
+    );
+
+    save(records, C);
+
+    near(
+        calculateInbreedingCoefficient(
+            C,
+            B,
+            records
+        ),
+        0.25
+    );
+
+    // 删除祖先记录
+    const missing = structuredClone(
+        records
+    );
+
+    delete missing[A.id];
+
+    expectError(() =>
+        generateOffspringData(
+            C,
+            B,
+            id(),
+            missing
+        )
+    );
+
+    // 重复使用祖先编号
+    expectError(() =>
+        generateOffspringData(
+            C,
+            B,
+            A.id,
+            records
+        )
+    );
+
+    // 模拟系统也应拒绝非法家谱
+    expectError(() =>
+        simulateBreeding(
+            C,
+            B,
+            missing,
+            {
+                count: 1,
+                idPrefix: id(),
+                now: NOW
+            }
+        )
+    );
+
+    return (
+        "祖先缺失及重复编号" +
+        "不会被静默接受。"
+    );
+}
+
+
+// ==========================================
+// 运行全部综合测试
+// ==========================================
+
+function runAllTests() {
+
+    passed = 0;
+    failed = 0;
+    nextId = 1;
+
+    $("results").innerHTML = "";
+
+    const start = performance.now();
+
+    const tests = [
+
+        [
+            "01 所有犬种组合",
+            testAllBreedPairs
+        ],
+
+        [
+            "02 批量统计完整性",
+            testStatistics
+        ],
+
+        [
+            "03 模拟数据隔离",
+            testSimulationIsolation
+        ],
+
+        [
+            "04 突变统计逻辑",
+            testMutationStatistics
+        ],
+
+        [
+            "05 个体值总体均值",
+            testIVMean
+        ],
+
+        [
+            "06 近交惩罚统计",
+            testInbreedingStatistics
+        ],
+
+        [
+            "07 连续20轮回交",
+            testMultiGeneration
+        ],
+
+        [
+            "08 突变来源跨世代保存",
+            testMutationOrigin
+        ],
+
+        [
+            "09 孵化与序列化",
+            testSerialization
+        ],
+
+        [
+            "10 编号及CSV导出",
+            testCSV
+        ],
+
+        [
+            "11 繁育限制拦截",
+            testRestrictions
+        ],
+
+        [
+            "12 非法家谱拦截",
+            testInvalidFamily
+        ]
+
+    ];
+
+    for (const [title, fn] of tests) {
+
+        runTest(title, fn);
+
+    }
+
+    const elapsed = (
+        (performance.now() - start) / 1000
+    ).toFixed(2);
+
+    $("summary").textContent =
+
+        `${passed}/${passed + failed}项通过` +
+
+        `｜失败${failed}项` +
+
+        `｜耗时${elapsed}秒`;
+
+    $("summary").className =
+
+        failed === 0
+            ? "pass"
+            : "fail";
+
+}
+
+
+// ==========================================
+// 初始化
+// ==========================================
+
+$("run").addEventListener(
+    "click",
+    runAllTests
+);
+
+runAllTests();
+
+</script>
+
+</body>
+</html>
