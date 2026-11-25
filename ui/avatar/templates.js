@@ -20,7 +20,7 @@ export const EARS = {
 };
 // [头型, 耳型, 口鼻宽度, 口鼻长度]；简化卡通轮廓，非犬种标准图。
 export const BREED_TEMPLATES = {
- chihuahua:['round','erect',14,10], pomeranian:['shag','small',15,10], yorkshire_terrier:['shag','tall',16,13], maltese:['shag','feather',18,12], papillon:['fox','butterfly',14,12], toy_poodle:['teddy','teddy',19,14], corgi:['fox','erect',21,14], shiba_inu:['fox','small',20,13], beagle:['round','drop',23,15], border_collie:['fox','fold',19,16], shetland_sheepdog:['shag','fold',15,18], cocker_spaniel:['round','long',21,14], golden_retriever:['round','feather',23,16], labrador_retriever:['square','drop',24,15], german_shepherd:['narrow','tall',20,19], husky:['fox','tall',21,15], samoyed:['shag','erect',22,13], doberman:['narrow','fold',18,19], saint_bernard:['square','long',26,15], great_dane:['narrow','drop',24,20], newfoundland:['square','feather',27,15], tibetan_mastiff:['shag','drop',26,15], great_pyrenees:['shag','fold',23,15], bernese_mountain_dog:['square','feather',23,16]
+ chihuahua:['round','erect',14,10], pomeranian:['shag','small',15,10], yorkshire_terrier:['shag','tall',16,13], maltese:['shag','feather',18,12], papillon:['fox','butterfly',14,12], toy_poodle:['teddy','teddy',19,14], corgi:['fox','erect',21,14], shiba_inu:['fox','small',20,13], beagle:['round','drop',23,15], border_collie:['fox','fold',19,16], shetland_sheepdog:['shag','fold',15,18], cocker_spaniel:['round','long',21,14], golden_retriever:['round','feather',23,16], labrador_retriever:['square','drop',21,15], german_shepherd:['narrow','tall',20,19], husky:['fox','tall',21,15], samoyed:['shag','erect',22,13], doberman:['narrow','tall',18,19], saint_bernard:['square','long',26,15], great_dane:['narrow','drop',24,20], newfoundland:['square','feather',24,16], tibetan_mastiff:['shag','drop',26,15], great_pyrenees:['shag','fold',23,15], bernese_mountain_dog:['square','feather',23,16]
 };
 
 // 犬种专属头型、眼距、眼高、眼径、口鼻中心、鼻宽、长毛宽度。
@@ -143,13 +143,13 @@ export const BREED_PROFILES = {
     1
   ],
   "labrador_retriever": [
-    "M17 29 Q19 13 50 12 Q81 13 83 29 L86 53 Q85 76 68 80 L32 80 Q15 76 14 53Z",
-    20,
+    "M23 29 Q25 13 50 12 Q75 13 77 29 L80 53 Q79 75 65 80 L35 80 Q21 75 20 53Z",
+    17,
     43,
     4.8,
     62,
-    9,
-    1
+    8,
+    0.88
   ],
   "german_shepherd": [
     "M25 29 Q27 12 50 11 Q73 12 75 29 L80 47 Q76 59 65 72 L57 81 Q50 85 43 81 L35 72 Q24 59 20 47Z",
@@ -188,13 +188,13 @@ export const BREED_PROFILES = {
     0.8
   ],
   "saint_bernard": [
-    "M14 31 Q12 15 34 11 Q50 8 66 11 Q88 15 86 31 L90 55 Q88 78 72 82 L28 82 Q12 78 10 55Z",
+    "M14 30 Q12 14 34 11 Q50 8 66 11 Q88 14 86 30 L89 52 Q91 69 79 75 L75 82 Q62 86 50 80 Q38 86 25 82 L21 75 Q9 69 11 52Z",
     21,
-    44,
+    45,
     5.5,
-    63,
+    64,
     10,
-    1
+    0.96
   ],
   "great_dane": [
     "M24 27 Q24 11 50 10 Q76 11 76 27 L80 52 Q79 74 65 82 L35 82 Q21 74 20 52Z",
@@ -206,13 +206,13 @@ export const BREED_PROFILES = {
     0.9
   ],
   "newfoundland": [
-    "M13 32 Q16 13 35 12 Q50 7 65 12 Q84 13 87 32 L92 56 Q89 79 70 82 L30 82 Q11 79 8 56Z",
-    22,
-    44,
+    "M17 31 Q19 13 35 12 Q50 6 65 12 Q81 13 83 31 Q95 48 85 60 L90 69 78 68 73 79 Q50 88 27 79 L22 68 10 69 15 60 Q5 48 17 31Z",
+    19,
+    42,
     4.7,
-    63,
-    10,
-    1
+    61,
+    9,
+    1.03
   ],
   "tibetan_mastiff": [
     "M13 31 L17 19 28 17 35 9 43 13 50 6 57 13 65 9 72 17 83 19 87 31 Q97 47 89 61 L94 71 80 69 73 82 60 78 50 86 40 78 27 82 20 69 6 71 11 61 Q3 47 13 31Z",
@@ -240,5 +240,177 @@ export const BREED_PROFILES = {
     62,
     9,
     1
+  ]
+};
+
+// 独立耳廓、内耳/折线、饰毛轮廓、毛流线、说明。
+export const BREED_EARS = {
+  "chihuahua": [
+    "M28 39 Q6 30 3 7 Q5 1 14 5 Q32 12 43 29 L37 40Z",
+    "M27 32 Q12 24 9 10 Q26 15 36 29Z",
+    "",
+    "",
+    "大而外张的立耳"
+  ],
+  "pomeranian": [
+    "M25 31 Q17 20 22 7 Q34 8 40 24 L36 34Z",
+    "M27 25 L25 13 Q33 17 35 25Z",
+    "M25 31 L17 25 21 24 17 18 23 20 22 13 30 22 39 25Z",
+    "M24 23 L29 28",
+    "小三角立耳，耳根绒毛"
+  ],
+  "yorkshire_terrier": [
+    "M27 34 Q16 21 18 3 Q32 8 40 25 L36 36Z",
+    "M28 27 L22 10 Q32 17 35 27Z",
+    "M26 33 L14 27 20 27 15 19 23 24 22 15 33 27 39 29Z",
+    "M23 23 L27 30",
+    "小V形立耳，耳根丝毛"
+  ],
+  "maltese": [
+    "M27 23 Q10 20 10 38 L8 65 Q12 78 25 74 L36 38Z",
+    "M16 34 Q11 49 15 64 Q22 61 25 44",
+    "M27 23 Q7 20 6 40 L3 70 9 67 6 82 15 78 18 85 26 77 34 39Z",
+    "M12 41 Q9 60 12 73 M20 39 Q18 59 20 75",
+    "下垂长丝毛耳"
+  ],
+  "papillon": [
+    "M29 39 Q7 36 3 18 Q0 6 10 4 Q28 1 42 27 L37 41Z",
+    "M27 31 Q10 28 9 12 Q23 8 35 27Z",
+    "M29 42 Q20 41 15 38 L11 40 10 35 5 34 7 29 2 24 4 20 Q0 10 5 6 Q12 0 23 8 Q34 15 42 27 L37 41Z",
+    "M8 23 Q13 33 19 37 M14 16 Q21 28 28 33",
+    "外张大立耳，连续下缘流苏"
+  ],
+  "toy_poodle": [
+    "M27 24 Q12 16 8 32 Q2 43 8 53 Q2 64 10 72 Q9 82 23 80 Q35 79 35 53 L37 33Z",
+    "M19 32 Q10 45 16 61 Q11 70 19 73",
+    "M27 24 Q10 15 7 30 Q0 38 5 49 Q0 58 6 66 Q1 78 13 80 Q20 87 29 77 L36 38Z",
+    "M12 39 Q21 34 21 43 M11 55 Q21 50 21 60 M15 69 Q24 64 24 72",
+    "卷毛垂耳"
+  ],
+  "corgi": [
+    "M27 40 Q9 28 8 10 Q9 2 17 5 Q35 10 43 30 L37 42Z",
+    "M27 32 Q14 24 14 12 Q28 16 36 31Z",
+    "",
+    "",
+    "宽大圆尖立耳"
+  ],
+  "shiba_inu": [
+    "M25 33 Q15 21 20 10 Q22 6 26 10 L39 26 35 36Z",
+    "M27 26 L23 15 34 27Z",
+    "",
+    "",
+    "小而前倾的三角立耳"
+  ],
+  "beagle": [
+    "M28 25 Q9 20 6 40 Q2 62 13 73 Q25 80 31 61 L38 34Z",
+    "M17 34 Q9 48 14 65",
+    "",
+    "",
+    "宽圆长垂耳"
+  ],
+  "border_collie": [
+    "M27 36 Q13 24 13 12 Q18 6 27 11 L42 29 36 39Z",
+    "M15 13 Q23 15 29 25 L20 23 Q15 20 15 13Z",
+    "M27 36 L12 31 18 29 10 24 17 24 23 30 38 31Z",
+    "M19 26 L26 33",
+    "半立耳，耳尖向前折"
+  ],
+  "shetland_sheepdog": [
+    "M27 32 Q18 19 23 8 Q29 4 33 11 L42 25 36 35Z",
+    "M23 9 Q31 9 34 17 L26 19 Q22 15 23 9Z",
+    "M27 34 L16 29 21 26 15 20 23 22 26 28 39 28Z",
+    "M22 22 L29 30",
+    "高位小半立耳，耳尖折下及饰毛"
+  ],
+  "cocker_spaniel": [
+    "M27 23 Q8 15 5 36 Q1 56 3 74 Q4 85 18 85 Q31 85 34 65 L37 36Z",
+    "M15 32 Q8 50 12 74",
+    "M27 23 Q9 15 4 33 Q0 43 4 51 Q0 61 3 70 Q0 81 11 85 Q20 88 29 79 L36 38Z",
+    "M11 35 Q5 50 10 65 Q7 73 13 80 M20 33 Q14 50 19 68 L18 79",
+    "低位长垂耳，波浪饰毛"
+  ],
+  "golden_retriever": [
+    "M27 24 Q10 20 8 38 L8 57 Q11 67 22 63 L36 36Z",
+    "M17 33 Q11 44 15 56",
+    "M27 24 Q9 19 7 37 L4 57 10 55 7 66 15 63 17 71 26 63 36 36Z",
+    "M13 40 Q10 51 13 61 M20 39 L19 62",
+    "中等垂耳，边缘饰毛"
+  ],
+  "labrador_retriever": [
+    "M27 24 Q12 20 10 34 L11 54 Q15 63 24 59 L37 35Z",
+    "M18 31 Q13 42 17 53",
+    "",
+    "",
+    "贴头短垂耳，无明显饰毛"
+  ],
+  "german_shepherd": [
+    "M27 36 Q14 21 17 3 Q19 0 22 4 L43 26 36 39Z",
+    "M27 28 L21 9 36 27Z",
+    "M27 36 L15 30 20 27 16 21 25 26 38 31Z",
+    "M23 23 L29 31",
+    "高而宽根的直立尖耳"
+  ],
+  "husky": [
+    "M25 37 Q8 22 12 5 Q15 0 21 4 L43 27 37 39Z",
+    "M25 29 Q17 19 17 9 L36 28Z",
+    "M25 37 L12 30 18 27 13 21 23 26 38 32Z",
+    "M20 22 L28 31",
+    "宽大厚实三角立耳"
+  ],
+  "samoyed": [
+    "M25 34 Q13 20 17 8 Q20 3 25 8 L40 25 35 36Z",
+    "M26 26 Q20 19 22 13 L34 26Z",
+    "M25 34 L12 29 18 25 13 19 22 23 27 28 38 29Z",
+    "M20 23 L27 29",
+    "圆尖厚立耳，耳缘绒毛"
+  ],
+  "doberman": [
+    "M28 36 Q20 19 24 1 Q26 -1 28 3 L40 27 35 38Z",
+    "M28 28 L27 8 35 27Z",
+    "",
+    "",
+    "修长尖顶立耳（裁耳代表型）"
+  ],
+  "saint_bernard": [
+    "M26 24 Q9 20 7 39 L8 62 Q12 74 24 69 L37 36Z",
+    "M16 33 Q11 46 15 60",
+    "M26 24 Q9 20 7 39 L5 62 11 60 10 72 20 70 26 64 37 36Z",
+    "M13 44 L14 63",
+    "厚实圆三角垂耳"
+  ],
+  "great_dane": [
+    "M28 23 Q13 16 9 30 L13 56 Q18 64 25 57 L38 34Z",
+    "M14 28 Q22 25 30 33 L19 50Z",
+    "",
+    "",
+    "高位自然折垂耳"
+  ],
+  "newfoundland": [
+    "M26 24 Q10 21 9 37 L10 55 Q15 65 24 60 L37 35Z",
+    "M17 33 Q12 44 17 55",
+    "M26 24 Q10 20 8 36 L5 55 11 53 9 64 17 62 22 68 36 35Z",
+    "M14 39 L15 58",
+    "小三角垂耳，浓密饰毛"
+  ],
+  "tibetan_mastiff": [
+    "M26 24 Q10 19 8 35 L13 57 Q20 64 27 55 L38 35Z",
+    "M15 30 Q24 28 30 36 L20 49Z",
+    "M26 24 Q10 19 7 35 L5 49 11 47 9 61 18 57 22 65 37 35Z",
+    "M14 36 L17 53",
+    "厚三角垂耳，耳根鬃毛"
+  ],
+  "great_pyrenees": [
+    "M27 27 Q13 22 11 37 L16 54 Q22 60 28 52 L38 35Z",
+    "M17 32 Q25 31 30 37 L21 48Z",
+    "M27 27 Q13 22 10 37 L8 49 14 47 13 57 21 55 27 59 38 35Z",
+    "M17 38 L20 51",
+    "低位小V形垂耳，短饰毛"
+  ],
+  "bernese_mountain_dog": [
+    "M27 24 Q11 18 8 35 L12 58 Q18 68 27 60 L38 35Z",
+    "M16 30 Q24 29 30 36 L19 52Z",
+    "M27 24 Q11 18 7 35 L5 55 11 53 10 65 18 62 24 68 38 35Z",
+    "M14 38 L17 59",
+    "高位三角垂耳，波浪饰毛"
   ]
 };

@@ -1,3 +1,4 @@
+import {renderDogMarks,renderDogMarkControls} from "./dogMarksView.js";
 import {renderDogAvatar} from "./avatar/renderer.js";
 import {
     getBreed,
@@ -130,7 +131,7 @@ export function renderAnimalCard(animal) {
                 ${renderDogAvatar(animal,{phenotype})}
 
                 <div>
-                    <h3>${escapeHTML(animal.name)}</h3>
+                    <h3>${escapeHTML(animal.name)} ${renderDogMarks(animal)}</h3>
 
                     
                 </div>
@@ -361,7 +362,7 @@ export function renderAnimalDetail(animal, {readOnly=false,previewLocation="å¸‚å
                 ${renderDogAvatar(animal,{phenotype,large:true})}
 
                 <div>
-                    <h2>${escapeHTML(animal.name)}</h2>
+                    <h2>${escapeHTML(animal.name)} ${renderDogMarks(animal)}</h2>
                     
                     <p>${breed.name} Â· ${getSexText(animal.sex)}</p>
                 </div>
@@ -369,6 +370,7 @@ export function renderAnimalDetail(animal, {readOnly=false,previewLocation="å¸‚å
             </div>
 
             ${readOnly ? "" : `
+            ${renderDogMarkControls(animal)}
             <div class="action-row">
 
                 <div class="rename-group">

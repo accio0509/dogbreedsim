@@ -12,7 +12,7 @@ check('购买市场首次刷新、冷却拒绝且不扣费',()=>{assert(svc.refr
 check('租借市场独立冷却',()=>assert(svc.paidRefresh(true).success));
 check('跨午夜自然刷新不重置付费冷却',()=>{t+=3600000;assert(svc.refresh().changed);assert.equal(paidRefreshRemaining(s,false,t),3*3600000);assert(!svc.paidRefresh().success);});
 check('四小时后允许刷新',()=>{t+=3*3600000;assert(svc.paidRefresh().success);assert.equal(s.market.listings.length,6);});
-check('旧存档迁移及冷却保留',()=>{s.version='0.10.0';const next=migrateSave(s);assert.equal(next.version,'1.0.3');assert.equal(next.market.lastPaidAt,s.market.lastPaidAt);});
+check('旧存档迁移及冷却保留',()=>{s.version='0.10.0';const next=migrateSave(s);assert.equal(next.version,'1.0.4');assert.equal(next.market.lastPaidAt,s.market.lastPaidAt);});
 check('犬只提示含基因与六维能力',()=>{const a=createAnimal({id:'A',breedId:'chihuahua',name:'球球'});const tip=dogTooltip(a);assert(tip.includes('毛色基因'));for(const k of ['力量','速度','耐力','敏捷','智力','感知'])assert(tip.includes(k));assert.equal(filterDogs([a],{...emptyFilter(),name:'球'}).length,1);});
 check('默认折叠筛选',()=>assert(!/<details[^>]+\bopen\b/.test(filterMarkup(emptyFilter()))));
 check('探索过程分阶段、不泄露随机奖励',()=>{for(const mapId of ['park','field','wetland','forest','snow']){const a={mapId,startedAt:0,endsAt:100};assert.equal(new Set([0,20,50,80,95,100].map(t=>explorationProgress(a,'球球',t))).size,6);}});

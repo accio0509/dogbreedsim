@@ -1,3 +1,4 @@
+import {toggleDogMark,dogMarkText} from '../engine/dogMarks.js';
 import {notificationSnapshot,collectNotifications,hasReadyNotice} from '../engine/notifications.js';
 import {getStarterDogNames} from '../data/species/dog/names.js';
 import {SIZE_CLASSES} from '../data/species/dog/breeds.js';
@@ -589,7 +590,7 @@ function openAnimalDetail(id) {
     selectedAnimalId = id;
 
     animalDetail.innerHTML =
-        renderAnimalDetail(animal,{pedigreeRecords:gameState.pedigreeRecords})+`<section class="detail-section"><button data-action="retire-animal" data-id="${id}" ${animal.activity!=null||animal.source==='rental'?'disabled':''}>永久退役</button><div id="retire-confirmation" hidden><p>确认永久退役？此操作不可撤销，犬只将不再参与任何活动。</p><button data-action="confirm-retire" data-id="${id}">确认退役</button> <button data-action="cancel-retire">取消</button></div><p>退役后释放位置，家谱及荣誉记录永久保留。</p></section>`+`<section class="detail-section"><h3>冠军荣誉</h3>${competitionHonors(gameState,id).map(h=>`<p>🏆 ${({puppy:"幼犬",juvenile:"青年犬",adult:"成年犬"})[h.stage]}组 · ${COMPETITION_LEVELS.find(l=>l.id===h.levelId)?.name}${COMPETITIONS.find(c=>c.id===h.eventId)?.name}冠军 ×${h.count}</p>`).join("")||"暂无冠军荣誉"}<h3>参赛记录</h3>${gameState.competitionRecords.filter(r=>r.animalId===id).map(r=>`<p>${COMPETITION_LEVELS.find(l=>l.id===r.levelId)?.name??""}${COMPETITIONS.find(c=>c.id===r.eventId)?.name??"比赛"} · 第${r.rank}名 · ${r.score}分 · ${r.money} G</p>`).join("")||"暂无比赛记录"}</section>`;
+        renderAnimalDetail(animal,{pedigreeRecords:gameState.pedigreeRecords})+`<section class="detail-section"><button data-action="retire-animal" data-id="${id}" ${animal.activity!=null||animal.source==='rental'?'disabled':''}>永久退役</button><div id="retire-confirmation" hidden><p>确认永久退役？此操作不可撤销，犬只将不再参与任何活动。</p>${dogMarkText(animal)?`<p role="alert" style="color:#b34840;font-weight:bold">注意：该犬拥有 ${dogMarkText(animal)} 标记。</p><label><input type="checkbox" id="confirm-marked-retirement"> 我确认仍要退役这只已标记的犬</label>`:""}<button data-action="confirm-retire" data-id="${id}">确认退役</button> <button data-action="cancel-retire">取消</button></div><p>退役后释放位置，家谱及荣誉记录永久保留。</p></section>`+`<section class="detail-section"><h3>冠军荣誉</h3>${competitionHonors(gameState,id).map(h=>`<p>🏆 ${({puppy:"幼犬",juvenile:"青年犬",adult:"成年犬"})[h.stage]}组 · ${COMPETITION_LEVELS.find(l=>l.id===h.levelId)?.name}${COMPETITIONS.find(c=>c.id===h.eventId)?.name}冠军 ×${h.count}</p>`).join("")||"暂无冠军荣誉"}<h3>参赛记录</h3>${gameState.competitionRecords.filter(r=>r.animalId===id).map(r=>`<p>${COMPETITION_LEVELS.find(l=>l.id===r.levelId)?.name??""}${COMPETITIONS.find(c=>c.id===r.eventId)?.name??"比赛"} · 第${r.rank}名 · ${r.score}分 · ${r.money} G</p>`).join("")||"暂无比赛记录"}</section>`;
 
     if (!animalDialog.open) {
         animalDialog.showModal();
@@ -727,9 +728,10 @@ document.addEventListener("click", event => {
         case "export-save": {const blob=new Blob([JSON.stringify(gameState,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dogbreedsim-'+(DEV_MODE?'dev-':'')+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);break;}
         case "import-save": {const input=document.getElementById('import-save-file');input.onchange=async()=>{try{const file=input.files[0];if(!file)return;const candidate=migrateSave(JSON.parse(await file.text()));if(!confirm('导入将替换当前存档，继续？'))return;const key=DEV_MODE?DEV_SAVE_KEY:SAVE_KEY;const previous=localStorage.getItem(key);if(previous!==null)localStorage.setItem(key+':backup',previous);store.save(candidate);location.reload();}catch(e){showNotice('导入失败：'+e.message,true);} };input.click();break;}
 
+        case "toggle-dog-mark": {const r=commitAction(()=>toggleDogMark(gameState,id,actionButton.dataset.mark));if(r.success){renderPage();openAnimalDetail(id);}showRenameMessage(r.message,r.success);break;}
         case "retire-animal": {document.getElementById('retire-confirmation').hidden=false;break;}
-        case "cancel-retire": {document.getElementById('retire-confirmation').hidden=true;break;}
-        case "confirm-retire": {const r=commitAction(()=>retireAnimal(gameState,id,gameNow(gameState)));showNotice(r.message,!r.success);if(r.success){animalDialog.close();renderPage();}else showRenameMessage(r.message,false);break;}
+        case "cancel-retire": {document.getElementById('retire-confirmation').hidden=true;const c=document.getElementById('confirm-marked-retirement');if(c)c.checked=false;break;}
+        case "confirm-retire": {const r=commitAction(()=>retireAnimal(gameState,id,gameNow(gameState),{confirmMarked:document.getElementById("confirm-marked-retirement")?.checked===true}));showNotice(r.message,!r.success);if(r.success){animalDialog.close();renderPage();}else showRenameMessage(r.message,false);break;}
         case "upgrade-facility":
         case "buy-item": {
             const r=commitAction(()=>action==="upgrade-facility"?upgradeFacility(gameState,id):buyItem(gameState,id));
@@ -884,7 +886,7 @@ function initGame() {
         mainContent.textContent='存档读取失败：'+e.message+'。原存档未覆盖。';const download=document.createElement('button');download.textContent='导出原始存档';download.onclick=()=>{const url=URL.createObjectURL(new Blob([localStorage.getItem(DEV_MODE?DEV_SAVE_KEY:SAVE_KEY)??''],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='damaged-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};mainContent.append(download);
         showNotice('存档无法读取',true);
     }
-    console.log('狗狗育种模拟器 V1.0.3 初始化完成');
+    console.log('狗狗育种模拟器 V1.0.4 初始化完成');
 }
 
 initGame();

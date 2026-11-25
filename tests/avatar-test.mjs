@@ -27,3 +27,9 @@ assert.ok(patternMarkup('P3','#C99548','#29282B').includes('#F8F5ED'));
 const black={coatColor:g('coatColor','C07'),pattern:g('pattern','P0'),patternColor:g('patternColor','M04'),eyeColor:g('eyeColor','E01'),hairLength:g('hairLength','L1'),patternVisible:false};
 for(const b of getAllBreeds()){const svg=renderPortrait(b.id,black);assert.ok(svg.includes('stroke="#888186"')&&svg.includes('stroke="#a29a9c"')&&svg.includes('fill="#b6adb3"'));}
 console.log('V1.4 tricolor muzzle and facial contrast checks passed');
+
+import {BREED_EARS} from '../ui/avatar/templates.js';
+assert.equal(Object.keys(BREED_EARS).length,24);
+assert.equal(new Set(Object.values(BREED_EARS).map(e=>e[0])).size,24);
+for(const b of getAllBreeds()){const [outer,inner,fringe]=BREED_EARS[b.id];const short=renderPortrait(b.id,black);assert.ok(short.includes(outer)&&short.includes(inner));const long=renderPortrait(b.id,{...black,hairLength:g('hairLength','L3')});assert.ok(long.includes(fringe||outer));}
+console.log('24 distinct ears, inner ear and hair variants passed');

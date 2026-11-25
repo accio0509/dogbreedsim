@@ -39,7 +39,7 @@ export function runTrainingChecks(){const out=[];const test=(name,fn)=>{try{out.
  test('写盘失败完整回滚',()=>{const {s,service}=setup(()=>false);const b=structuredClone(s);return !service.start('A','STR').success&&same(s,b);});
  test('领取写盘失败不改变任务',()=>{let allow=true;const {s,service,time}=setup(()=>allow);service.start('A','STR');allow=false;time.now+=4*H;const b=structuredClone(s);return !service.claim('A').success&&same(s,b);});
  test('道具写盘失败不扣库存',()=>{const {s,service}=setup(()=>false);s.inventory.chew_toy=1;const b=structuredClone(s);return !service.useItem('A','chew_toy').success&&same(s,b);});
- test('旧版迁移与EV保留',()=>{const {s}=setup();s.version='0.6.0';delete s.trainingTasks;s.activeAnimals.A.ev.STR=20;const d=migrateSave(s);return d.version==='1.0.3'&&d.trainingTasks.length===0&&d.activeAnimals.A.ev.STR===20;});
+ test('旧版迁移与EV保留',()=>{const {s}=setup();s.version='0.6.0';delete s.trainingTasks;s.activeAnimals.A.ev.STR=20;const d=migrateSave(s);return d.version==='1.0.4'&&d.trainingTasks.length===0&&d.activeAnimals.A.ev.STR===20;});
  test('训练存档保留计时',()=>{const {s,service}=setup();service.start('A','STR');return same(migrateSave(s).trainingTasks,s.trainingTasks);});
  test('错误任务或EV拒绝迁移',()=>{const {s}=setup();s.activeAnimals.A.activity='training';try{migrateSave(s);return false;}catch{}s.activeAnimals.A.activity=null;s.activeAnimals.A.ev.STR=101;try{migrateSave(s);return false;}catch{return true;}});
  test('快进四小时可领取且不会自动重复',()=>{const {s,service,time}=setup();service.start('A','STR');advanceTestTime(s,4,time.now);return service.claim('A').gain===10&&!s.trainingTasks.length;});

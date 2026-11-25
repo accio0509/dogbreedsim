@@ -1,5 +1,5 @@
-import {predictLocus} from '../engine/management.js';
-import {APPEARANCE_LOCI} from '../data/species/dog/appearance.js';
+import {predictPortraits} from './avatar/prediction.js';
+import {renderPredictedAvatar} from './avatar/mini.js';
 import {getMutationRate} from '../engine/mutation.js';
 import {dogLabel,emptyFilter,filterDogs,filterMarkup,handleFilterChange,handleFilterClick,enhancePicker} from './dogPicker.js';
 import { getBreed } from '../data/species/dog/breeds.js';
@@ -35,6 +35,7 @@ function uniqueIds(animals, eggs, records) {
 // onChange is a notification, not a persistence transaction (added later).
 export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, onChange = ()=>{}, now = ()=>Date.now(), makeIds = uniqueIds, executeBreeding = startBreeding, getCapacity = null,preselected = ''}) {
     if (!root || !Array.isArray(animals) || !Array.isArray(eggs)) throw new Error('繁育室需要容器、犬只列表与犬蛋列表');
+    let portraitKey="", portraitRows=[], portraitPage=0;
     let motherId = animals.find(a=>a.id===preselected&&a.sex==='female')?.id??'', fatherId = animals.find(a=>a.id===preselected&&a.sex==='male')?.id??'', busy = false, disposed = false;
     const wrap = node('section', undefined, 'br-room');
     const style = node('style', `
@@ -101,9 +102,10 @@ export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, on
             const f=result.inbreedingCoefficient;
             preview.append(node('p',`后代犬种：${breedName(mother.breedId)}`),node('p',mother.source==='rental'||father.source==='rental'?'租借费已支付，成功产蛋后租借犬离场':'繁育费用：免费'),node('p',`孵化时间：${INCUBATION_HOURS} 游戏小时`),node('p',`近交系数：${typeof f==='number'?(f*100).toFixed(2)+'%':'未返回'}`));
             // Render the engine's value without assuming it is a percentage or multiplier.
-            preview.append(node('p','近交按实际家谱计算，不受犬种限制。'),node('p',`新突变基础概率：${(Math.min(1,getMutationRate(mother,father)*(mother.mutationPollen||father.mutationPollen?2:1))*100).toFixed(0)}%${mother.mutationPollen||father.mutationPollen?"（突变花粉生效）":""}`),node('h4','遗传预测（新突变前，各位点独立显性概率）'));
-            for(const [l,name] of Object.entries(APPEARANCE_LOCI))preview.append(node('p',`${name}：${predictLocus(mother,father,l).map(x=>`${x.name} ${(x.p*100).toFixed(1)}%`).join(' / ')}`));
-            preview.append(node('p','花纹及花纹颜色为位点显性概率，实际显示还受纯色及同色遮蔽影响。','br-muted'));
+            preview.append(node('p','近交按实际家谱计算，不受犬种限制。'),node('p',`新突变基础概率：${(Math.min(1,getMutationRate(mother,father)*(mother.mutationPollen||father.mutationPollen?2:1))*100).toFixed(0)}%${mother.mutationPollen||father.mutationPollen?"（突变花粉生效）":""}`),node('h4','后代外貌预测（未发生新突变时）'));
+            const key=JSON.stringify([mother.breedId,mother.genotype,father.genotype]);if(key!==portraitKey){portraitKey=key;portraitRows=predictPortraits(mother,father);portraitPage=0;}
+            const gallery=node('div'),nav=node('div');gallery.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px';nav.style.cssText='display:flex;gap:8px;align-items:center;margin:8px 0';
+            const drawPortraits=()=>{gallery.replaceChildren();nav.replaceChildren();const size=24,pages=Math.max(1,Math.ceil(portraitRows.length/size));portraitPage=Math.min(portraitPage,pages-1);for(const x of portraitRows.slice(portraitPage*size,(portraitPage+1)*size)){const p=x.phenotype,card=node('div');card.style.cssText='text-align:center;border:1px solid #aaa6;border-radius:8px;padding:6px';card.innerHTML=renderPredictedAvatar(mother.breedId,p);card.append(node('strong',`${(x.probability*100).toPrecision(3)}%`),node('small',[p.coatColor.name,p.patternVisible?p.pattern.name+' '+p.patternColor.name:'纯色',p.eyeColor.name,p.hairLength.name].join(' · ')));card.querySelector('strong').style.display='block';card.querySelector('small').style.display='block';gallery.append(card);}const prev=node('button','上一页'),next=node('button','下一页');prev.type=next.type='button';prev.disabled=portraitPage===0;next.disabled=portraitPage>=pages-1;prev.onclick=()=>{portraitPage--;drawPortraits();};next.onclick=()=>{portraitPage++;drawPortraits();};nav.append(prev,node('span',`${portraitPage+1}/${pages} 页 · ${portraitRows.length}种`),next);};drawPortraits();preview.append(gallery,nav,node('p','各头像概率为未发生新突变时的条件概率，合计100%（四舍五入可能有误差）。','br-muted'));
             const penalty=result.inbreedingPenalty;
             const penaltyText=typeof f==='number' ? (f<=0.0625?'无':f<=0.125?'−5%':f<=0.25?'−10%':'−20%') : '未返回';
             preview.append(node('p',`个体值惩罚（按近交规则）：${penaltyText}`));

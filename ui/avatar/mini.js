@@ -1,0 +1,4 @@
+import {renderDogAvatar,renderPortrait} from './renderer.js';
+import {SVG_AVATARS_ENABLED} from './settings.js';
+export function renderMiniAvatar(a,size=48){return `<span class="mini-dog-avatar" style="display:block;flex:0 0 ${size}px;width:${size}px;height:${size}px;position:relative;overflow:hidden">${renderDogAvatar(a).replace('style="background:',`style="width:100%;height:100%;min-width:0;min-height:0;margin:0;background:`).replace('width="100%" height="100%"','width="100%" height="100%" style="position:static;inset:auto"')}</span>`;}
+export function renderPredictedAvatar(breedId,p){return SVG_AVATARS_ENABLED?renderPortrait(breedId,p).replace('class="dog-portrait-svg"','class="dog-portrait-svg" width="64" height="56"'):`<span style="display:block;width:64px;height:56px;background:${p.coatColor.hex}"></span>`;}

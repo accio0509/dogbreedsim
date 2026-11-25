@@ -31,5 +31,5 @@ const saved=structuredClone(puppy);for(const name of ['第一次','第二次','�
 assert.deepEqual({...puppy,name:saved.name},saved);assert.ok(renameAnimal('M','新母犬').success);assert.equal(gameState.incubationTasks[0].motherName,'新母犬');assert.ok(renameAnimal('F','新父犬').success);assert.equal(gameState.incubationTasks[0].fatherName,'新父犬');
 for(const name of ['',null,'犬'.repeat(21),'a\nb'])assert.equal(renameAnimal('P',name).success,false);
 puppy.source='rental';assert.equal(renameAnimal('P','禁止').success,false);
-const old=createGameState();old.version='1.0.2';assert.equal(migrateSave(old).version,'1.0.3');
-console.log('V1.0.3 hatch preview, repeated rename, identity, parent names, rental and migration checks passed');
+const old=createGameState();old.version='1.0.2';assert.equal(migrateSave(old).version,'1.0.4');
+console.log('V1.0.4 hatch preview, repeated rename, identity, parent names, rental and migration checks passed');

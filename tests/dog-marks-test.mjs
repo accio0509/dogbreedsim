@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {createGameState} from '../storage/state.js';
+import {createAnimal} from '../engine/animal.js';
+import {getDogMarks,toggleDogMark,dogMarkText} from '../engine/dogMarks.js';
+import {retireAnimal} from '../engine/management.js';
+import {migrateSave} from '../storage/save.js';
+import {renderAnimalCard,renderAnimalDetail} from '../ui/animalView.js';
+import {familyTreeMarkup} from '../ui/managementView.js';
+import {createEgg} from '../engine/egg.js';
+const s=createGameState(),now=Date.now();
+const a=createAnimal({id:'A',breedId:'chihuahua',sex:'female',stage:'adult',location:'nursery'}),b=createAnimal({id:'B',breedId:'chihuahua',sex:'male',stage:'adult',location:'nursery'});
+for(const d of [a,b]){s.activeAnimals[d.id]=d;s.pedigreeRecords[d.id]=structuredClone(d);}
+assert.deepEqual(getDogMarks(migrateSave(s).activeAnimals.A),[]);
+const original=structuredClone(a);
+for(const key of ['heart','dumbbell','dna'])assert(toggleDogMark(s,'A',key).success);
+assert.deepEqual(getDogMarks(a),['heart','dumbbell','dna']);assert.deepEqual(s.pedigreeRecords.A.marks,a.marks);assert.deepEqual({...a,marks:undefined},{...original,marks:undefined});
+assert(!toggleDogMark(s,'A','invalid').success);assert(!toggleDogMark(s,'missing','heart').success);
+assert(toggleDogMark(s,'A','heart').success);assert.deepEqual(getDogMarks(a),['dumbbell','dna']);assert(toggleDogMark(s,'A','heart').success);
+assert(dogMarkText(a).includes('DNA'));assert(renderAnimalCard(a).includes('title="DNA"'));assert(renderAnimalDetail(a).includes('data-mark="dna"'));assert(renderAnimalDetail(a).includes('aria-pressed="true"'));assert(!renderAnimalDetail(a,{readOnly:true}).includes('toggle-dog-mark'));
+assert(familyTreeMarkup({animal:a,role:'中心',children:[]}).includes('title="DNA"'));
+assert.deepEqual(migrateSave(JSON.parse(JSON.stringify(s))).activeAnimals.A.marks,a.marks);
+const egg=createEgg({eggId:'E',offspringId:'P',mother:a,father:b,pedigreeRecords:s.pedigreeRecords,now});assert.deepEqual(getDogMarks(egg.offspringData),[]);
+b.source='rental';assert(!toggleDogMark(s,'B','heart').success);assert(!renderAnimalDetail(b).includes('toggle-dog-mark'));b.source='market';
+const before=structuredClone(s);assert(!retireAnimal(s,'A',now).success);assert.deepEqual(s,before);assert(retireAnimal(s,'A',now,{confirmMarked:true}).success);assert(!s.activeAnimals.A);assert.deepEqual(s.pedigreeRecords.A.marks,['heart','dumbbell','dna']);assert(!toggleDogMark(s,'A','heart').success);assert(retireAnimal(s,'B',now).success);
+assert.deepEqual(migrateSave(s).pedigreeRecords.A.marks,['heart','dumbbell','dna']);
+console.log('Dog marks: toggle, multi-label, card/detail/family, old save, persistence, noninheritance, rental restriction, retirement guard and archived marks passed');
