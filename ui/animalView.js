@@ -1,3 +1,4 @@
+import {renderDogAvatar} from "./avatar/renderer.js";
 import {
     getBreed,
     SIZE_CLASSES
@@ -126,9 +127,7 @@ export function renderAnimalCard(animal) {
 
             <div class="animal-card-header">
 
-                <div class="animal-placeholder"
-                     style="background:${phenotype.coatColor.hex}">
-                </div>
+                ${renderDogAvatar(animal,{phenotype})}
 
                 <div>
                     <h3>${escapeHTML(animal.name)}</h3>
@@ -359,9 +358,7 @@ export function renderAnimalDetail(animal, {readOnly=false,previewLocation="еЄВе
 
             <div class="detail-title">
 
-                <div class="animal-placeholder large"
-                     style="background:${phenotype.coatColor.hex}">
-                </div>
+                ${renderDogAvatar(animal,{phenotype,large:true})}
 
                 <div>
                     <h2>${escapeHTML(animal.name)}</h2>
