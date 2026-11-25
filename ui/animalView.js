@@ -209,10 +209,12 @@ export function renderAnimalList(animals) {
 
 
 // 能力表格
-function renderStatsTable(animal) {
+function renderStatsTable(animal, actualOnly = false) {
     const breed = getBreed(animal.breedId);
 
     const stats = calculateStats(animal);
+
+    if (actualOnly) return `<table class="data-table"><thead><tr><th>能力</th><th>实际能力</th></tr></thead><tbody>${STAT_KEYS.map(key => `<tr><td>${STAT_NAMES[key]}</td><td><strong>${stats[key]}</strong></td></tr>`).join("")}<tr class="total-row"><td>总和</td><td>${calculateTotal(stats)}</td></tr></tbody></table>`;
 
     return `
         <table class="data-table">
@@ -328,7 +330,7 @@ function renderGenotypeTable(animal) {
 
 
 // 犬只完整详情
-export function renderAnimalDetail(animal, {readOnly=false,previewLocation="市场待售",pedigreeRecords={}}={}) {
+export function renderAnimalDetail(animal, {readOnly=false,previewLocation="市场待售",pedigreeRecords={},showGenotype=false,actualStatsOnly=false}={}) {
     const breed = getBreed(animal.breedId);
 
     const personality =
@@ -522,14 +524,14 @@ export function renderAnimalDetail(animal, {readOnly=false,previewLocation="市�
 
             <h3>能力信息</h3>
 
-            ${renderStatsTable(animal)}
+            ${renderStatsTable(animal, actualStatsOnly)}
 
         </section>
 
 
         <section class="detail-section">
 
-            <details>
+            <details ${showGenotype?"open":""}>
 
                 <summary>查看完整基因型</summary>
 

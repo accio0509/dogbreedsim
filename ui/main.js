@@ -1,3 +1,4 @@
+import {notificationSnapshot,collectNotifications,hasReadyNotice} from '../engine/notifications.js';
 import {getStarterDogNames} from '../data/species/dog/names.js';
 import {SIZE_CLASSES} from '../data/species/dog/breeds.js';
 import {emptyFilter,filterDogs,filterMarkup,handleFilterChange,handleFilterClick} from './dogPicker.js';
@@ -72,9 +73,20 @@ function showNotice(message, bad = false) {
     notice.style.color = bad ? '#b34840' : '#52765b';
 }
 
+let noticeSnapshot=notificationSnapshot(gameState);
+function showCompletionMessages(messages){
+    if(!messages.length)return;
+    const dialog=document.getElementById('completion-dialog');
+    const list=document.getElementById('completion-list');
+    for(const message of messages){const li=document.createElement('li');li.textContent=message;list.append(li);}
+    if(!dialog.open)dialog.showModal();
+}
 function persist(candidate) {
     if (fatalSave) throw Error('存档不可用，请先刷新或备份');
-    return store.save(candidate);
+    const messages=collectNotifications(candidate,noticeSnapshot,gameNow(candidate));
+    const result=store.save(candidate);
+    if(result!==false){noticeSnapshot=notificationSnapshot(candidate);if(messages.length)queueMicrotask(()=>showCompletionMessages(messages));}
+    return result;
 }
 
 function commitAction(action) {
@@ -94,7 +106,7 @@ function commitAction(action) {
 function updateGrowth() {
     if (!gameState.initialized || fatalSave) return false;
     const draft=structuredClone(gameState);
-    if (!settleGrowth(draft)) return false;
+    if (!settleGrowth(draft) && !hasReadyNotice(draft,gameNow(draft))) return false;
     try { draft.timestamps.lastPlayedAt=Date.now(); persist(draft); Object.assign(gameState,draft); return true; }
     catch(e){showNotice(e.message,true);return false;}
 }
@@ -713,7 +725,7 @@ document.addEventListener("click", event => {
             break;
         }
         case "export-save": {const blob=new Blob([JSON.stringify(gameState,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dogbreedsim-'+(DEV_MODE?'dev-':'')+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);break;}
-        case "import-save": {const input=document.getElementById('import-save-file');input.onchange=async()=>{try{const file=input.files[0];if(!file)return;const candidate=migrateSave(JSON.parse(await file.text()));if(!confirm('导入将替换当前存档，继续？'))return;const key=DEV_MODE?DEV_SAVE_KEY:SAVE_KEY;const previous=localStorage.getItem(key);if(previous!==null)localStorage.setItem(key+':backup',previous);persist(candidate);location.reload();}catch(e){showNotice('导入失败：'+e.message,true);} };input.click();break;}
+        case "import-save": {const input=document.getElementById('import-save-file');input.onchange=async()=>{try{const file=input.files[0];if(!file)return;const candidate=migrateSave(JSON.parse(await file.text()));if(!confirm('导入将替换当前存档，继续？'))return;const key=DEV_MODE?DEV_SAVE_KEY:SAVE_KEY;const previous=localStorage.getItem(key);if(previous!==null)localStorage.setItem(key+':backup',previous);store.save(candidate);location.reload();}catch(e){showNotice('导入失败：'+e.message,true);} };input.click();break;}
 
         case "retire-animal": {document.getElementById('retire-confirmation').hidden=false;break;}
         case "cancel-retire": {document.getElementById('retire-confirmation').hidden=true;break;}
@@ -834,6 +846,9 @@ animalDialog.addEventListener("close", () => {
 });
 
 
+const completionDialog=document.getElementById('completion-dialog');
+document.getElementById('close-completion').addEventListener('click',()=>completionDialog.close());
+completionDialog.addEventListener('close',()=>document.getElementById('completion-list').replaceChildren());
 // 游戏初始化
 function initGame() {
     updateClock();
@@ -846,6 +861,7 @@ function initGame() {
         }
         const saved=store.load();
         if(saved) Object.assign(gameState,saved);
+        noticeSnapshot=notificationSnapshot(gameState);
         breeding=createFormalBreeding({state:gameState,persist});
         marketService=createMarketService({state:gameState,persist});
         explorationService=createExplorationService({state:gameState,persist});
@@ -861,13 +877,14 @@ function initGame() {
             if(changed && room) syncRoom();
             else if(changed && ['overview','nursery','computer'].includes(currentPage) && !animalDialog.open) renderPage();
         },30000);
+        setInterval(()=>{if(!fatalSave&&gameState.initialized&&hasReadyNotice(gameState,gameNow(gameState))){updateGrowth();explorationRoom?.refresh();trainingRoom?.refresh();competitionRoom?.refresh();}},1000);
     } catch(e) {
         fatalSave=true;
         document.querySelectorAll('[data-page]').forEach(b=>b.disabled=true);
         mainContent.textContent='存档读取失败：'+e.message+'。原存档未覆盖。';const download=document.createElement('button');download.textContent='导出原始存档';download.onclick=()=>{const url=URL.createObjectURL(new Blob([localStorage.getItem(DEV_MODE?DEV_SAVE_KEY:SAVE_KEY)??''],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='damaged-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};mainContent.append(download);
         showNotice('存档无法读取',true);
     }
-    console.log('狗狗育种模拟器 V1.0.1 初始化完成');
+    console.log('狗狗育种模拟器 V1.0.2 初始化完成');
 }
 
 initGame();

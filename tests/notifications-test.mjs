@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {collectNotifications,notificationSnapshot,hasReadyNotice} from '../engine/notifications.js';
+import {createGameState} from '../storage/state.js';
+import {migrateSave} from '../storage/save.js';
+import {readFileSync} from 'node:fs';
+const s=createGameState();s.initialized=true;s.activeAnimals.A={id:'A',name:'球球',stage:'puppy'};
+let previous=notificationSnapshot(s);s.activeAnimals.A.stage='juvenile';
+for(const k of ['trainingTasks','explorationTasks','competitionTasks'])s[k]=[{animalId:'A',startedAt:0,endsAt:100}];
+assert.equal(collectNotifications(s,previous,99).length,1);previous=notificationSnapshot(s);assert(hasReadyNotice(s,100));assert.equal(collectNotifications(s,previous,100).length,3);assert(!hasReadyNotice(s,100));
+const reload=JSON.parse(JSON.stringify(s));assert.equal(collectNotifications(reload,notificationSnapshot(reload),101).length,0);
+previous=notificationSnapshot(s);s.trainingTasks=[];assert.equal(collectNotifications(s,previous,101).length,0);
+s.trainingTasks=[{animalId:'A',startedAt:200,endsAt:300}];previous=notificationSnapshot(s);s.trainingTasks=[];assert.equal(collectNotifications(s,previous,300).length,1);
+s.activeAnimals.A.stage='adult';assert.equal(collectNotifications(s,notificationSnapshot({...s,activeAnimals:{A:{id:'A',stage:'juvenile'}}}),400).length,1);
+const old=createGameState();old.version='1.0.1';assert.equal(migrateSave(old).version,'1.0.2');
+const read=n=>readFileSync(new URL('../'+n,import.meta.url),'utf8');assert(!read('ui/trainingView.js').includes('<select data-tr-select="item">'));assert(read('ui/trainingView.js').includes('data-tr="select-item"'));assert(read('ui/marketView.js').includes('showGenotype:true'));assert(read('index.html').includes('completion-dialog'));
+console.log('V1.0.2 notification, migration and UI checks passed');

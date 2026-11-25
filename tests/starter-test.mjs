@@ -22,7 +22,7 @@ const old=createGameState();old.version='1.0.0';old.money=9999;
 const devKey='dogbreedsim:dev-save';const data=new Map([[SAVE_KEY,JSON.stringify(old)],[devKey,'untouched']]);
 const storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};
 const store=createSaveStore(storage), stale=createSaveStore(storage);
-assert.equal(store.load().version,'1.0.1');store.reset();
+assert.equal(store.load().version,'1.0.2');store.reset();
 assert.equal(data.get(SAVE_KEY+':reset-backup'),JSON.stringify(old));assert.equal(data.get(devKey),'untouched');
 assert.equal(store.load().initialized,false);assert.equal(store.load().money,createGameState().money);assert.throws(()=>stale.reset());
 assert.throws(()=>stale.save(old));
