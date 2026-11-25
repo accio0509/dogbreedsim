@@ -1,3 +1,4 @@
+import {getStarterDogNames} from '../data/species/dog/names.js';
 import {gameNow} from '../engine/gameClock.js';
 import { settleGrowth } from "../engine/growth.js";
 import { GAME_CONFIG } from "../config/game.js";
@@ -201,7 +202,7 @@ export function hasSpace(location) {
 
 
 // 初始化新游戏
-export function initializeGame(kennelName, breedId) {
+export function initializeGame(kennelName, breedId, starterNames = null) {
     if (gameState.initialized) {
         return {
             success: false,
@@ -218,13 +219,18 @@ export function initializeGame(kennelName, breedId) {
         };
     }
 
+    const names = starterNames ?? getStarterDogNames();
+    if (!Array.isArray(names) || names.length !== 2 || names.some(name => typeof name !== 'string' || !name.trim() || name.trim().length > 20)) {
+        return {success:false,message:'犬只名称必须为1至20个字符'};
+    }
+
     gameState.kennelName =
         kennelName.trim().slice(0, 20) || "我的犬舍";
 
     const female = createAnimal({
         id: allocateAnimalId(),
         breedId: breedId,
-        name: breed.name + "一号",
+        name: names[0].trim(),
         sex: "female",
         source: "starter"
     });
@@ -232,11 +238,13 @@ export function initializeGame(kennelName, breedId) {
     const male = createAnimal({
         id: allocateAnimalId(),
         breedId: breedId,
-        name: breed.name + "二号",
+        name: names[1].trim(),
         sex: "male",
         source: "starter"
     });
 
+    female.birthNamingUsed = true;
+    male.birthNamingUsed = true;
     addAnimal(female);
     addAnimal(male);
 

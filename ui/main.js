@@ -1,3 +1,5 @@
+import {getStarterDogNames} from '../data/species/dog/names.js';
+import {SIZE_CLASSES} from '../data/species/dog/breeds.js';
 import {emptyFilter,filterDogs,filterMarkup,handleFilterChange,handleFilterClick} from './dogPicker.js';
 import {getBreed} from '../data/species/dog/breeds.js';
 import {calculateTotal} from '../engine/stats.js';
@@ -183,91 +185,77 @@ function updateHeader() {
 // 新游戏初始化界面
 function renderNewGame() {
     const breeds = getAllBreeds();
-
     mainContent.innerHTML = `
-
         <section class="panel setup-panel">
-
             <h2>建立你的犬舍</h2>
-
-            <p>
-                选择初始犬种。
-                初始犬只：一公一母。
-            </p>
-
             <form id="new-game-form">
-
-                <label for="kennel-name">
-                    犬舍名称
-                </label>
-
-                <input id="kennel-name"
-                       name="kennelName"
-                       maxlength="20"
-                       value="我的犬舍"
-                       required>
-
-                <label>初始犬种</label>
-
-                <div class="breed-options">
-
-                    ${breeds.map((breed, index) => `
-
-                        <label class="breed-option">
-
-                            <input type="radio"
-                                   name="breedId"
-                                   value="${breed.id}"
-                                   ${index === 0 ? "checked" : ""}>
-
-                            <strong>${breed.name}</strong>
-
-                            <span class="muted">
-                                成年体重
-                                ${breed.weightRange.min}～
-                                ${breed.weightRange.max} kg
-                            </span>
-
-                        </label>
-
-                    `).join("")}
-
+                <label for="kennel-name">犬舍名称</label>
+                <input id="kennel-name" name="kennelName" maxlength="20" value="我的犬舍" required>
+                <div id="starter-breeds">
+                    <h3>选择初始犬种（一公一母）</h3>
+                    ${Object.entries(SIZE_CLASSES).sort((a,b)=>a[1].rank-b[1].rank).map(([size,info])=>`
+                        <fieldset class="starter-size-group">
+                            <legend>${info.name}犬</legend>
+                            <div class="breed-options">
+                                ${breeds.filter(b=>b.size===size).map(b=>`
+                                    <label class="breed-option">
+                                        <input type="radio" name="breedId" value="${b.id}" ${b.id===breeds[0].id?'checked':''}>
+                                        <strong>${escapeHTML(b.name)}</strong>
+                                    </label>`).join('')}
+                            </div>
+                        </fieldset>`).join('')}
+                    <button type="button" id="starter-next" class="primary-button">下一步：为幼犬命名</button>
                 </div>
-
-                <p class="muted">
-                    初始资金：${gameState.money}
-                </p>
-
-                <button type="submit"
-                        class="primary-button">
-                    建立犬舍
-                </button>
-
+                <div id="starter-naming" hidden>
+                    <h3 id="starter-chosen"></h3>
+                    <p class="muted">已随机生成名字，可以修改或重新随机。确认后不可改名。</p>
+                    <div class="starter-name-grid">
+                        <label>母犬 ♀<input id="starter-female" name="femaleName" maxlength="20" disabled></label>
+                        <label>公犬 ♂<input id="starter-male" name="maleName" maxlength="20" disabled></label>
+                    </div>
+                    <div class="action-row starter-name-actions">
+                        <button type="button" id="starter-back">返回选犬</button>
+                        <button type="button" id="starter-random">重新随机</button>
+                        <button type="submit" class="primary-button">建立犬舍</button>
+                    </div>
+                </div>
+                <p class="muted">初始资金：${gameState.money}</p>
             </form>
-
-        <div class="action-row"><button data-action="import-save">导入已有存档</button><input hidden type="file" id="import-save-file" accept=".json,application/json"></div>
-        </section>
-    `;
-
-    document.getElementById("new-game-form")
-        .addEventListener("submit", event => {
-
-            event.preventDefault();
-
-            const data = new FormData(event.target);
-
-            const result = commitAction(() => initializeGame(
-                data.get("kennelName"),
-                data.get("breedId")
-            ));
-
-            if (!result.success) {
-                alert(result.message);
-                return;
-            }
-
-            renderPage("overview");
-        });
+            <div class="action-row"><button data-action="import-save">导入已有存档</button><input hidden type="file" id="import-save-file" accept=".json,application/json"></div>
+        </section>`;
+    const form = document.getElementById('new-game-form');
+    const selection = document.getElementById('starter-breeds');
+    const naming = document.getElementById('starter-naming');
+    const female = document.getElementById('starter-female');
+    const male = document.getElementById('starter-male');
+    let chosen = null;
+    const randomize = () => { [female.value,male.value] = getStarterDogNames(); };
+    const next = () => {
+        if (!form.reportValidity()) return;
+        const breed = getBreed(new FormData(form).get('breedId'));
+        if (!breed) return;
+        if (chosen !== breed.id) randomize();
+        chosen = breed.id;
+        document.getElementById('starter-chosen').textContent = breed.name + ' · 初始幼犬';
+        selection.hidden = true; naming.hidden = false;
+        for (const input of [female,male]) {input.disabled=false;input.required=true;}
+        female.focus();
+    };
+    document.getElementById('starter-next').onclick = next;
+    document.getElementById('starter-random').onclick = randomize;
+    document.getElementById('starter-back').onclick = () => {
+        selection.hidden=false; naming.hidden=true;
+        for (const input of [female,male]) {input.disabled=true;input.required=false;}
+        document.getElementById('starter-next').focus();
+    };
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (naming.hidden) {next();return;}
+        const data = new FormData(form);
+        const result = commitAction(() => initializeGame(data.get('kennelName'),chosen,[female.value,male.value]));
+        if (!result.success) {alert(result.message);return;}
+        renderPage('overview');
+    });
 }
 
 
@@ -570,7 +558,7 @@ function renderPage(page = currentPage,preselected = '') {
             break;
 
         case "settings":
-            mainContent.innerHTML = `<h2>游戏设置</h2><section class="panel"><p>${DEV_MODE ? "当前为独立开发模式。" : "游戏自动存档。"}</p><label>游戏时间倍率 <select id="game-speed">${SPEEDS.map(n=>`<option value="${n}" ${n===(gameState.gameClock?.speed??1)?"selected":""}>${n}倍速</option>`).join("")}</select></label><p>任务按游戏时间，市场按现实时间。</p><div class="action-row"><button data-action="export-save">导出存档</button><button data-action="import-save">导入存档</button><input hidden type="file" id="import-save-file" accept=".json,application/json"></div><details><summary>游戏帮助</summary><p>饲育屋成长，成年犬可繁育。探索与比赛获得奖励，训练增加努力值。道具仓库使用道具。设置倍速可缩短等待时间。</p></details><a href="${DEV_MODE ? "./index.html" : "./index.html?dev=1"}">${DEV_MODE ? "返回正式游戏" : "打开独立开发模式"}</a></section>`;
+            mainContent.innerHTML = `<h2>游戏设置</h2><section class="panel"><p>${DEV_MODE ? "当前为独立开发模式。" : "游戏自动存档。"}</p><label>游戏时间倍率 <select id="game-speed">${SPEEDS.map(n=>`<option value="${n}" ${n===(gameState.gameClock?.speed??1)?"selected":""}>${n}倍速</option>`).join("")}</select></label><p>任务按游戏时间，市场按现实时间。</p><div class="action-row"><button data-action="export-save">导出存档</button><button data-action="import-save">导入存档</button><input hidden type="file" id="import-save-file" accept=".json,application/json"></div><div class="action-row"><button data-action="reset-game" class="danger-reset">重置游戏</button></div><details><summary>游戏帮助</summary><p>饲育屋成长，成年犬可繁育。探索与比赛获得奖励，训练增加努力值。道具仓库使用道具。设置倍速可缩短等待时间。</p></details><a href="${DEV_MODE ? "./index.html" : "./index.html?dev=1"}">${DEV_MODE ? "返回正式游戏" : "打开独立开发模式"}</a></section>`;
             break;
         default:
             renderUnavailable(page);
@@ -717,6 +705,13 @@ document.addEventListener("click", event => {
 
 
     switch (action) {
+        case "reset-game": {
+            if (!confirm('重置当前'+(DEV_MODE?'开发':'正式')+'存档？所有犬只、资金及进度将重新开始。建议先导出存档。')) break;
+            if (!confirm('确认重置游戏？')) break;
+            try { if(fatalSave) throw Error('存档不可用'); store.reset(); location.reload(); }
+            catch(e){showNotice('重置失败：'+e.message,true);}
+            break;
+        }
         case "export-save": {const blob=new Blob([JSON.stringify(gameState,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dogbreedsim-'+(DEV_MODE?'dev-':'')+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);break;}
         case "import-save": {const input=document.getElementById('import-save-file');input.onchange=async()=>{try{const file=input.files[0];if(!file)return;const candidate=migrateSave(JSON.parse(await file.text()));if(!confirm('导入将替换当前存档，继续？'))return;const key=DEV_MODE?DEV_SAVE_KEY:SAVE_KEY;const previous=localStorage.getItem(key);if(previous!==null)localStorage.setItem(key+':backup',previous);persist(candidate);location.reload();}catch(e){showNotice('导入失败：'+e.message,true);} };input.click();break;}
 
@@ -872,7 +867,7 @@ function initGame() {
         mainContent.textContent='存档读取失败：'+e.message+'。原存档未覆盖。';const download=document.createElement('button');download.textContent='导出原始存档';download.onclick=()=>{const url=URL.createObjectURL(new Blob([localStorage.getItem(DEV_MODE?DEV_SAVE_KEY:SAVE_KEY)??''],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='damaged-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};mainContent.append(download);
         showNotice('存档无法读取',true);
     }
-    console.log('狗狗育种模拟器 V1.0.0 初始化完成');
+    console.log('狗狗育种模拟器 V1.0.1 初始化完成');
 }
 
 initGame();

@@ -508,3 +508,25 @@ summary {
 .shop-item{min-width:0;overflow-wrap:anywhere}
 .shop-item .shop-price{font-weight:bold;margin-top:auto;padding-top:8px}
 .shop-item button{width:100%;margin-top:4px}
+
+/* Responsive first-run setup */
+.setup-panel { max-width: 1180px; width: 100%; margin: 12px auto; }
+.starter-size-group { min-width: 0; border: 0; padding: 0; margin: 0 0 16px; }
+.starter-size-group legend { font-weight: 600; padding: 0 0 7px; }
+.starter-size-group .breed-options { grid-template-columns: repeat(auto-fit,minmax(min(100%, 120px),1fr)); gap: 8px; }
+.starter-size-group .breed-option { flex-direction: row; align-items: center; min-height: 46px; padding: 9px; gap: 6px; overflow-wrap: anywhere; }
+.starter-size-group .breed-option input { align-self: center; flex-shrink: 0; }
+.starter-name-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 180px),1fr)); gap: 12px; }
+.starter-name-grid input { display: block; margin-top: 5px; }
+.starter-name-actions { margin-top: 14px; flex-wrap: wrap; }
+@media (max-width: 650px) {
+  .game-layout:has(.setup-panel) > .sidebar { display: none; }
+  #main-content:has(.setup-panel) { padding: 10px; }
+  .setup-panel { padding: 14px; margin: 0 auto; }
+  .header:has(~ .game-layout .setup-panel) { flex-wrap: wrap; padding: 12px; gap: 8px; }
+}
+
+/* Reset is deliberately separate from routine save actions. */
+.danger-reset{border:1px solid #b45d55;color:#a33f37;background:transparent}
+.game-layout:has(.setup-panel) > .sidebar {display:none}
+.header:has(~ .game-layout .setup-panel) {flex-wrap:wrap}

@@ -1,4 +1,4 @@
-# 狗狗育种模拟器 V1.0.0
+# 狗狗育种模拟器 V1.0.1
 
 正式单机版，离线运行，无账号及联网服务。
 
@@ -16,3 +16,6 @@ Windows：安装 Python 3 后双击「启动游戏.bat」，浏览器访问 http
 
 ## 验证
 开发者可运行 `node --experimental-default-type=module tests/run-v100.mjs`，以及 tests 下 balance-test、family-items-test、witch-routing-test、database-test、rc1-test、rc1-ui-test、final-release-test（均为 .mjs）。本地浏览器和 Windows 启动脚本仍需实际环境验证。
+
+## V1.0.1
+初始犬种按体型分组，随窗口宽度排列；随机生成两个不同名字，可在确认前修改。扩充随机名字库。游戏设置可重置当前模式，双重确认并保存最近一次重置前的浏览器内部备份；建议另行导出 JSON。

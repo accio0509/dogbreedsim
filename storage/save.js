@@ -13,7 +13,7 @@ const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 
 export function migrateSave(raw) {
     if (!object(raw)) throw Error('存档不是有效对象');
-    if (!['0.2.0','0.3.0','0.4.0','0.5.0','0.6.0','0.7.0','0.8.0','0.9.0','0.10.0','1.0.0-rc.1',GAME_CONFIG.version].includes(raw.version)) throw Error('不支持的存档版本：'+raw.version);
+    if (!['0.2.0','0.3.0','0.4.0','0.5.0','0.6.0','0.7.0','0.8.0','0.9.0','0.10.0','1.0.0-rc.1','1.0.0',GAME_CONFIG.version].includes(raw.version)) throw Error('不支持的存档版本：'+raw.version);
     const s = migrateGeneticsIds(structuredClone(raw));
     if (!object(s.activeAnimals) || !object(s.pedigreeRecords)) throw Error('犬只或家谱档案损坏');
     if (typeof s.initialized !== 'boolean' || !Number.isFinite(s.money) || !Number.isSafeInteger(s.nextAnimalId) || s.nextAnimalId < 1 || !Number.isSafeInteger(s.nextEventId) || s.nextEventId < 1) throw Error('存档基础字段异常');
@@ -70,6 +70,14 @@ export function createSaveStore(storage, key=SAVE_KEY) {
     let expected = storage.getItem(key);
     return {
         load(){ return expected === null ? null : migrateSave(JSON.parse(expected)); },
+        reset(){
+            if (storage.getItem(key)!==expected) throw Error('存档已在其他页面修改，请刷新后重试');
+            if(expected!==null) storage.setItem(key+':reset-backup',expected);
+            const fresh=JSON.stringify(createGameState());
+            storage.setItem(key,fresh);
+            expected=fresh;
+            return true;
+        },
         save(candidate){
             if (storage.getItem(key)!==expected) throw Error('存档已在其他页面修改，请刷新后重试');
             const serialized = JSON.stringify(candidate);

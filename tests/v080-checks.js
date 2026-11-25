@@ -44,5 +44,5 @@ test('选择标签包含名称性别犬种年龄且不显示编号',()=>{const s
 test('多条件筛选与空结果',()=>{const s=setup(),dogs=Object.values(s.activeAnimals);return filterDogs(dogs,{...emptyFilter(),name:'奶',sex:'female',breed:'corgi',stage:'adult',personality:'calm'})[0]?.id==='B'&&filterDogs(dogs,{...emptyFilter(),name:'不存在'}).length===0;});
 test('筛选输入防止HTML注入',()=>filterMarkup({...emptyFilter(),name:'"><script>'}).includes('&lt;script&gt;'));
 test('详情含快捷入口，预览不含派遣',()=>{const a=setup().activeAnimals.A;return renderAnimalDetail(a).includes('data-action="dispatch-animal"')&&!renderAnimalDetail(a,{readOnly:true}).includes('data-action="dispatch-animal"');});
-test('旧0.7存档补齐比赛及倍速字段',()=>{const s=setup();s.version='0.7.0';delete s.gameClock;delete s.competitionTasks;const d=migrateSave(s);return d.version==='1.0.0'&&d.gameClock===null&&d.competitionTasks.length===0&&same(s.activeAnimals,d.activeAnimals);});
+test('旧0.7存档补齐比赛及倍速字段',()=>{const s=setup();s.version='0.7.0';delete s.gameClock;delete s.competitionTasks;const d=migrateSave(s);return d.version==='1.0.1'&&d.gameClock===null&&d.competitionTasks.length===0&&same(s.activeAnimals,d.activeAnimals);});
 return out;}
