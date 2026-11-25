@@ -721,7 +721,7 @@ document.addEventListener("click", event => {
         case "reset-game": {
             if (!confirm('重置当前'+(DEV_MODE?'开发':'正式')+'存档？所有犬只、资金及进度将重新开始。建议先导出存档。')) break;
             if (!confirm('确认重置游戏？')) break;
-            try { if(fatalSave) throw Error('存档不可用'); store.reset(); location.reload(); }
+            try { if(!store) throw Error('无法访问本地存储，请检查浏览器权限'); store.reset(); location.reload(); }
             catch(e){showNotice('重置失败：'+e.message,true);}
             break;
         }
@@ -883,7 +883,17 @@ function initGame() {
     } catch(e) {
         fatalSave=true;
         document.querySelectorAll('[data-page]').forEach(b=>b.disabled=true);
-        mainContent.textContent='存档读取失败：'+e.message+'。原存档未覆盖。';const download=document.createElement('button');download.textContent='导出原始存档';download.onclick=()=>{const url=URL.createObjectURL(new Blob([localStorage.getItem(DEV_MODE?DEV_SAVE_KEY:SAVE_KEY)??''],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='damaged-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};mainContent.append(download);
+        mainContent.replaceChildren();
+        const panel=document.createElement('section');panel.className='panel';
+        const heading=document.createElement('h2');heading.textContent='存档读取失败';
+        const detail=document.createElement('p');detail.textContent=e.message+'。原存档未覆盖。';
+        const help=document.createElement('p');help.textContent='建议先导出原始存档。重新开始将自动备份当前存档，并清空当前犬舍进度。';
+        const actions=document.createElement('div');actions.className='action-row';
+        const download=document.createElement('button');download.type='button';download.textContent='导出原始存档';
+        download.onclick=()=>{try{const url=URL.createObjectURL(new Blob([localStorage.getItem(DEV_MODE?DEV_SAVE_KEY:SAVE_KEY)??''],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='damaged-save-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(err){showNotice('导出失败：'+err.message,true);}};
+        const retry=document.createElement('button');retry.type='button';retry.textContent='重新读取';retry.onclick=()=>location.reload();
+        const reset=document.createElement('button');reset.type='button';reset.textContent='重新开始游戏';reset.className='danger-reset';reset.dataset.action='reset-game';
+        actions.append(download,retry,reset);panel.append(heading,detail,help,actions);mainContent.append(panel);
         showNotice('存档无法读取',true);
     }
     console.log('狗狗育种模拟器 V1.0.4 初始化完成');
