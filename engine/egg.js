@@ -23,7 +23,7 @@ export function createEgg({
     offspringId,
     mother,
     father,
-    pedigreeRecords = {},
+    pedigreeRecords = {}, inheritedCount,
     now = Date.now()
 }) {
 
@@ -35,7 +35,7 @@ export function createEgg({
         mother,
         father,
         offspringId,
-        pedigreeRecords
+        pedigreeRecords, inheritedCount
     );
 
     return {
@@ -134,7 +134,7 @@ export function startBreeding({
     eggId,
     offspringId,
     eggs,
-    pedigreeRecords = {},
+    pedigreeRecords = {}, inheritedCount,
     now = Date.now()
 }) {
 
@@ -208,7 +208,7 @@ export function startBreeding({
             offspringId,
             mother,
             father,
-            pedigreeRecords,
+            pedigreeRecords, inheritedCount,
             now
         });
 

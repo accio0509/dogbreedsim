@@ -1,6 +1,6 @@
 export const GAME_CONFIG = {
 
-    version: "1.0.4",
+    version: "1.0.5",
 
     initialMoney: 1000,
 

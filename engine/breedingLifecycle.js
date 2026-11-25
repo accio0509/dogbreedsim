@@ -27,7 +27,7 @@ function transact(state, persist, operation) {
         return result;
     } catch(e) { return fail(e.message || '操作失败'); }
 }
-export function breedAndSave({state,motherId,fatherId,eggId,offspringId,now=Date.now(),persist}) {
+export function breedAndSave({state,motherId,fatherId,eggId,offspringId,now=Date.now(),persist,inheritedCount}) {
     return transact(state,persist,draft=>{
         if (!Number.isFinite(now)) return fail('时间无效');
         const mother=draft.animals.find(a=>a.id===motherId),father=draft.animals.find(a=>a.id===fatherId);
@@ -35,7 +35,7 @@ export function breedAndSave({state,motherId,fatherId,eggId,offspringId,now=Date
         if (!eggId || !offspringId || eggId===offspringId || draft.animals.some(a=>a.id===eggId||a.id===offspringId) || owns(draft.pedigreeRecords,eggId) || owns(draft.pedigreeRecords,offspringId) || draft.eggs.some(e=>[e.id,e.offspringId].some(id=>id===eggId||id===offspringId))) return fail('犬蛋或后代编号冲突');
         // Preserve parent ancestry even if the active dog later leaves the collection.
         for(const dog of [mother,father]) if(!owns(draft.pedigreeRecords,dog.id)) Object.defineProperty(draft.pedigreeRecords,dog.id,{value:structuredClone(dog),writable:true,enumerable:true,configurable:true});
-        return startBreeding({mother,father,eggId,offspringId,eggs:draft.eggs,pedigreeRecords:draft.pedigreeRecords,now});
+        return startBreeding({mother,father,eggId,offspringId,eggs:draft.eggs,pedigreeRecords:draft.pedigreeRecords,now,inheritedCount});
     });
 }
 export function claimEgg({state,eggId,name='',now=Date.now(),persist,chooseLocation=()=> 'nursery'}) {

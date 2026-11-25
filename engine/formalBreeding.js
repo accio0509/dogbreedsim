@@ -27,13 +27,14 @@ export function createFormalBreeding({state,persist,now=()=>gameNow(state)}) {
     }
     return {
         capacity:()=>caps(state),
-        breed(motherId,fatherId){return run((d,v,at)=>{
+        breed(motherId,fatherId,item=""){return run((d,v,at)=>{
+            const counts={destiny_knot:4,advanced_destiny_knot:5};if(item&&(!Object.hasOwn(counts,item)||!(d.inventory[item]>0)))return fail("遗传道具不足或无效");
             if(v.eggs.length>=caps(d).incubation)return fail('孵化室已满，请先领取幼犬');
             const used=new Set([...Object.keys(d.activeAnimals),...Object.keys(d.pedigreeRecords),...v.eggs.flatMap(e=>[e.id,e.offspringId])]);
             let offspringId,eggId;
             do {const n=d.nextAnimalId++;offspringId=formatAnimalId(n);eggId='EGG'+String(n).padStart(5,'0');} while(used.has(offspringId)||used.has(eggId));
-            const result=breedAndSave({state:v,motherId,fatherId,eggId,offspringId,now:at,persist:()=>true});
-            if(result.success){for(const id of [motherId,fatherId]){const a=v.animals.find(x=>x.id===id);if(a)delete a.mutationPollen;if(a?.source==='rental'){v.pedigreeRecords[id]={...structuredClone(a),rentalReturnedAt:at};v.animals.splice(v.animals.indexOf(a),1);result.message+=` 租借犬${a.name}已归还。`;}}}
+            const result=breedAndSave({state:v,motherId,fatherId,eggId,offspringId,now:at,persist:()=>true,inheritedCount:item?counts[item]:undefined});
+            if(result.success){if(item){d.inventory[item]--;result.message+=` 使用${item=== "destiny_knot"?"遗传结":"高级遗传结"}。`;}for(const id of [motherId,fatherId]){const a=v.animals.find(x=>x.id===id);if(a)delete a.mutationPollen;if(a?.source==='rental'){v.pedigreeRecords[id]={...structuredClone(a),rentalReturnedAt:at};v.animals.splice(v.animals.indexOf(a),1);result.message+=` 租借犬${a.name}已归还。`;}}}
             return result;
         });},
         claim(eggId,name){return run((d,v,at)=>{

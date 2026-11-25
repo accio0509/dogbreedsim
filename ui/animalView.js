@@ -1,3 +1,4 @@
+import {geneLabel} from "./geneStyle.js";
 import {renderDogMarks,renderDogMarkControls} from "./dogMarksView.js";
 import {renderDogAvatar} from "./avatar/renderer.js";
 import {
@@ -306,13 +307,13 @@ function renderGenotypeTable(animal) {
                                 <td>${name}</td>
 
                                 <td>
-                                    ${gene1.name}
+                                    ${geneLabel(animal.breedId,locus,alleles[0])}
                                     ${alleles[0].mutated ? "★" : ""}
                                     <small>${alleles[0].allele} · 显性等级 ${gene1.dominance}</small>
                                 </td>
 
                                 <td>
-                                    ${gene2.name}
+                                    ${geneLabel(animal.breedId,locus,alleles[1])}
                                     ${alleles[1].mutated ? "★" : ""}
                                     <small>${alleles[1].allele} · 显性等级 ${gene2.dominance}</small>
                                 </td>

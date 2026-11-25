@@ -146,7 +146,7 @@ export function validateIV(iv) {
 // ==================================================
 
 
-export function inheritIV(mother, father) {
+export function inheritIV(mother, father, inheritedCount = GAME_CONFIG.stats.inheritedIVCount) {
 
     validateIV(mother.iv);
 
@@ -160,7 +160,7 @@ export function inheritIV(mother, father) {
 
             STAT_KEYS,
 
-            config.inheritedIVCount
+            inheritedCount
 
         );
 
@@ -552,7 +552,7 @@ export function inheritPedigree(
 
 export function inheritAttributes(
     mother,
-    father
+    father, inheritedCount
 ) {
 
     if (!mother || !father) {
@@ -579,7 +579,7 @@ export function inheritAttributes(
 
     const ivResult = inheritIV(
         mother,
-        father
+        father, inheritedCount
     );
 
     const personalityResult =

@@ -6,7 +6,7 @@ import {calculatePhenotype,getAllowedAlleles,getDominantAllele} from './genetics
 import {getBreedAppearance} from '../data/species/dog/breeds.js';
 import {getGene,isMutationOnlyGene} from '../data/species/dog/appearance.js';
 export const FACILITIES={nursery:{name:'饲育屋',max:30,step:5,price:500},computer:{name:'电脑盒子',max:180,step:20,price:300},breeding:{name:'繁育室',max:5,step:1,price:800},incubation:{name:'孵化室',max:5,step:1,price:1000}};
-export const ITEM_PRICES={deluxe_meal:200,hatch_stone:150,training_whistle:60,explore_ration:80,ev_boost:120,ev_single_reset:100,calm_card:250,cooldown_tonic:180,ev_reset:300,dog_biscuit:30,chew_toy:45,energy_snack:75};
+export const ITEM_PRICES={destiny_knot:500,deluxe_meal:200,hatch_stone:150,training_whistle:60,explore_ration:80,ev_boost:120,ev_single_reset:100,calm_card:250,cooldown_tonic:180,ev_reset:300,dog_biscuit:30,chew_toy:45,energy_snack:75};
 const fail=message=>({success:false,message});
 export function facilityPrice(s,key){const f=FACILITIES[key],initial={nursery:10,computer:60,breeding:1,incubation:1}[key];return f.price*2**Math.max(0,Math.floor((s.facilities[key].capacity-initial)/f.step));}
 export function retireAnimal(s,id,at,{confirmMarked=false}={}){const a=s.activeAnimals[id];if(!a||a.retired||a.source==='rental'||a.activity!=null)return fail('只能退役空闲自有犬');if(getDogMarks(a).length&&!confirmMarked)return fail('该犬已有标记，请额外确认退役');settleGrowth(s,at);s.pedigreeRecords[id]={...structuredClone(a),location:'retired',retired:true,retiredAt:at,retiredStage:a.stage};s.pedigreeRecords[id].timestamps.retiredAt=at;delete s.activeAnimals[id];const message=`${a.name}已退役，档案永久保留`;s.events.unshift({id:s.nextEventId++,type:'retirement',message,timestamp:at});return {success:true,message};}

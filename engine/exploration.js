@@ -2,7 +2,7 @@ import {WITCH_RATES,awardWitchMaterials,tradeWitch} from './witch.js';
 import {getPersonality} from '../data/species/dog/personalities.js';
 import {gameNow} from './gameClock.js';
 import {GAME_CONFIG as G} from '../config/game.js';
-import {getExplorationMap,EXPLORATION_ITEMS} from '../config/exploration.js';
+import {getExplorationMap,EXPLORATION_ITEMS,pickMapBreed} from '../config/exploration.js';
 import {getAllBreeds,getBreed} from '../data/species/dog/breeds.js';
 import {getRandomDogName} from '../data/species/dog/names.js';
 import {createAnimal,formatAnimalId} from './animal.js';
@@ -37,7 +37,7 @@ function rewardFor(m,at,rng,luck=1,charm=1){
     const item=rng()<Math.min(1,m.itemChance*luck*charm)?m.item:null;
     let puppy=null;
     if(rng()<Math.min(1,m.puppyChance*luck*charm)){
-        const breeds=getAllBreeds(), breed=breeds[Math.floor(rng()*breeds.length)];
+        const breeds=getAllBreeds(), breed=pickMapBreed(m.id,breeds,rng);
         puppy=createAnimal({id:'DISCOVERY',breedId:breed.id,name:getRandomDogName(),stage:'puppy',source:'exploration'});
         puppy.breeding={count:0,lastSuccessAt:null};puppy.timestamps.createdAt=at;puppy.timestamps.hatchedAt=at;puppy.timestamps.lastGrowthAt=at;
     }

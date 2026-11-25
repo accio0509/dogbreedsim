@@ -1,5 +1,5 @@
 import {predictPortraits} from './avatar/prediction.js';
-import {renderPredictedAvatar} from './avatar/mini.js';
+import {renderPredictedAvatar,renderMiniAvatar} from './avatar/mini.js';
 import {getMutationRate} from '../engine/mutation.js';
 import {dogLabel,emptyFilter,filterDogs,filterMarkup,handleFilterChange,handleFilterClick,enhancePicker} from './dogPicker.js';
 import { getBreed } from '../data/species/dog/breeds.js';
@@ -33,7 +33,7 @@ function uniqueIds(animals, eggs, records) {
 
 // animals, eggs and pedigreeRecords must be the same live objects used by the game.
 // onChange is a notification, not a persistence transaction (added later).
-export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, onChange = ()=>{}, now = ()=>Date.now(), makeIds = uniqueIds, executeBreeding = startBreeding, getCapacity = null,preselected = ''}) {
+export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, onChange = ()=>{}, now = ()=>Date.now(), makeIds = uniqueIds, executeBreeding = startBreeding, getCapacity = null,preselected = '',getInventory=()=>({})}) {
     if (!root || !Array.isArray(animals) || !Array.isArray(eggs)) throw new Error('繁育室需要容器、犬只列表与犬蛋列表');
     let portraitKey="", portraitRows=[], portraitPage=0;
     let motherId = animals.find(a=>a.id===preselected&&a.sex==='female')?.id??'', fatherId = animals.find(a=>a.id===preselected&&a.sex==='male')?.id??'', busy = false, disposed = false;
@@ -56,10 +56,10 @@ export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, on
         const label = node('label',title);
         const select = node('select');
         select.setAttribute('aria-label',title);
-        const info = node('div',undefined,'br-info');
-        const filters=emptyFilter(), filterBox=node('div');filterBox.innerHTML=filterMarkup(filters,{fixedSex:true});filterBox.addEventListener('change',ev=>handleFilterChange(ev,filters,refresh));filterBox.addEventListener('click',ev=>handleFilterClick(ev,filters,()=>{filterBox.innerHTML=filterMarkup(filters,{fixedSex:true});refresh();}));label.append(select); panel.append(filterBox,label,info); grid.append(panel);
+        const info = node('div',undefined,'br-info');const avatar=node('div');
+        const filters=emptyFilter(), filterBox=node('div');filterBox.innerHTML=filterMarkup(filters,{fixedSex:true});filterBox.addEventListener('change',ev=>handleFilterChange(ev,filters,refresh));filterBox.addEventListener('click',ev=>handleFilterClick(ev,filters,()=>{filterBox.innerHTML=filterMarkup(filters,{fixedSex:true});refresh();}));label.append(select); panel.append(filterBox,label,avatar,info); grid.append(panel);
         select.addEventListener('change',()=>{if(sex==='female') motherId=select.value; else fatherId=select.value; refresh();});
-        return {select,info,sex,filters};
+        return {select,info,avatar,sex,filters};
     }
     const fatherPanel = parentPanel('♂ 父本','male');
     const motherPanel = parentPanel('♀ 母本','female');
@@ -67,7 +67,7 @@ export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, on
     const status = node('p'); status.setAttribute('role','status');
     const button = node('button','确认繁育'); button.type='button';
     const count = node('p',undefined,'br-muted');
-    wrap.append(grid,preview,button,status,count); root.replaceChildren(wrap);
+    const itemSelect=node('select');itemSelect.setAttribute('aria-label','遗传道具');const itemLabel=node('label','遗传道具（每次最多一个）');itemLabel.append(itemSelect);wrap.append(grid,itemLabel,preview,button,status,count); root.replaceChildren(wrap);
 
     const find = id => animals.find(a=>String(a.id)===id);
     function populate(panel, chosenId, time) {
@@ -80,7 +80,7 @@ export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, on
         select.value=chosenId;
         enhancePicker(select,entries);
         const dog=find(select.value);
-        if (!dog) {panel.info.textContent='未选择';return '';}
+        panel.avatar.innerHTML=dog?renderMiniAvatar(dog,72):'';if (!dog) {panel.info.textContent='未选择';return '';}
         const remaining=getRemainingCooldown(dog,time);
         const cooldownText=remaining>0 ? `${Math.floor(Math.ceil(remaining/60000)/60)}小时${Math.ceil(remaining/60000)%60}分钟` : '已就绪';
         panel.info.textContent=[`犬种：${breedName(dog.breedId)}`,`阶段：${stages[dog.stage] || dog.stage}`,`剩余繁育次数：${dog.source==='rental'?1:getRemainingBreedings(dog)}`,`冷却：${cooldownText}`,`状态：${dog.retired?'已退役':dog.activity?'活动中':'空闲'}`,`位置：${dog.location==='nursery'?'饲育屋':dog.location==='computer'?'电脑盒子':dog.location==='breeding'?'繁育室（租借）':dog.location}`].join('\n');
@@ -88,7 +88,7 @@ export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, on
     }
     function refresh() {
         if(disposed) return;
-        const time=now();
+        const time=now();const inv=getInventory(),old=itemSelect.value;const options=[new Option('不使用（3项IV）',''),... [['destiny_knot','遗传结（4项IV）'],['advanced_destiny_knot','高级遗传结（5项IV）']].map(([k,n])=>{const o=new Option(n+' × '+(inv[k]??0),k);o.disabled=!(inv[k]>0);return o;})];const sig=JSON.stringify(options.map(o=>[o.text,o.disabled]));if(itemSelect.dataset.sig!==sig){itemSelect.replaceChildren(...options);itemSelect.dataset.sig=sig;itemSelect.value=inv[old]>0?old:'';}
         motherId=populate(motherPanel,motherId,time);
         fatherId=populate(fatherPanel,fatherId,time);
         const mother=find(motherId), father=find(fatherId);
@@ -122,11 +122,11 @@ export function mountBreedingRoom(root, {animals, eggs, pedigreeRecords = {}, on
         if(busy || disposed) return;
         const mother=find(motherId),father=find(fatherId);
         if(!mother || !father) return;
-        if(!window.confirm(`确定让 ${father.name || father.id} 与 ${mother.name || mother.id} 繁育？成功后双方进入24小时冷却。`)) return;
+        if(!window.confirm(`确定让 ${father.name || father.id} 与 ${mother.name || mother.id} 繁育？成功后双方进入24小时冷却。${itemSelect.value?"将消耗一个"+itemSelect.selectedOptions[0].text.split(" × ")[0]+"。":""}`)) return;
         busy=true; button.disabled=true;
         try {
             const ids=makeIds(animals,eggs,pedigreeRecords);
-            const result=executeBreeding({mother,father,...ids,eggs,pedigreeRecords,now:now()});
+            const result=executeBreeding({mother,father,...ids,eggs,pedigreeRecords,now:now(),item:itemSelect.value});
             status.textContent=result.message || (result.success?'繁育成功':'繁育失败');
             status.className=result.success?'br-good':'br-bad';
             if(result.success) {

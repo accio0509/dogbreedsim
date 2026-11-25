@@ -11,6 +11,6 @@ const reload=JSON.parse(JSON.stringify(s));assert.equal(collectNotifications(rel
 previous=notificationSnapshot(s);s.trainingTasks=[];assert.equal(collectNotifications(s,previous,101).length,0);
 s.trainingTasks=[{animalId:'A',startedAt:200,endsAt:300}];previous=notificationSnapshot(s);s.trainingTasks=[];assert.equal(collectNotifications(s,previous,300).length,1);
 s.activeAnimals.A.stage='adult';assert.equal(collectNotifications(s,notificationSnapshot({...s,activeAnimals:{A:{id:'A',stage:'juvenile'}}}),400).length,1);
-const old=createGameState();old.version='1.0.1';assert.equal(migrateSave(old).version,'1.0.4');
+const old=createGameState();old.version='1.0.1';assert.equal(migrateSave(old).version,'1.0.5');
 const read=n=>readFileSync(new URL('../'+n,import.meta.url),'utf8');assert(!read('ui/trainingView.js').includes('<select data-tr-select="item">'));assert(read('ui/trainingView.js').includes('data-tr="select-item"'));assert(read('ui/marketView.js').includes('showGenotype:true'));assert(read('index.html').includes('completion-dialog'));
 console.log('V1.0.4 notification, migration and UI checks passed');

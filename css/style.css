@@ -532,3 +532,5 @@ summary {
 .header:has(~ .game-layout .setup-panel) {flex-wrap:wrap}
 
 button.inventory-item{text-align:left;align-items:flex-start;min-width:0;white-space:normal;width:100%;color:inherit;background:#fff;cursor:pointer}button.inventory-item.unowned{color:#888;background:#eee}button.inventory-item.inventory-selected{border:2px solid #648f73;box-shadow:0 0 0 2px #648f7333;filter:none}button.inventory-item:focus-visible{outline:2px solid #648f73;outline-offset:2px}.market-card-click{cursor:pointer}.market-card-click:hover{color:#52765b}.market-preview-dialog{max-width:min(760px,92vw);max-height:85vh;overflow:auto}.market-preview-dialog .data-table{width:100%}#completion-dialog{width:min(440px,90vw);max-height:75vh;overflow:auto}#completion-list{padding-left:1.4em;line-height:1.8}
+
+.aligned-genes .gene-frame-rare{border:2px solid #c49a30;filter:none}.aligned-genes .gene-frame-mutation{border:2px solid #9a63c9;filter:none}.gene-text-rare{color:#a77809;font-weight:600}.gene-text-mutation{color:#9146b5;font-weight:600}.gene-small{width:13px;height:13px;vertical-align:middle;border-radius:3px}

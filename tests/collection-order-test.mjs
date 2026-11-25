@@ -22,5 +22,5 @@ const page={innerHTML:''};const buttons=getAllBreeds().map(b=>({dataset:{breedTa
 const root={innerHTML:'',querySelector(){return page;},querySelectorAll(){return buttons;}};
 renderCollection(root,s);
 for(const b of buttons){b.click();const panels=page.innerHTML.split('<div class="collection-genes aligned-genes">').slice(1);assert.equal(panels.length,5);for(const p of panels){const ranks=[...p.matchAll(/显性 (\d+)/g)].map(m=>Number(m[1]));assert(ranks.length);assert.deepEqual(ranks,[...ranks].sort((a,b)=>a-b));}}
-const old=createGameState();old.version='1.0.3';old.money=987;assert.equal(migrateSave(old).version,'1.0.4');assert.equal(migrateSave(old).money,987);
+const old=createGameState();old.version='1.0.3';old.money=987;assert.equal(migrateSave(old).version,'1.0.5');assert.equal(migrateSave(old).money,987);
 console.log(`${count} pool/history ordering checks; 24 breed UI pages; V1.0.3 migration passed`);

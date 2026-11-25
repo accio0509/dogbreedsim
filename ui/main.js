@@ -119,7 +119,7 @@ function renderBreedingPage(page,preselected) {
         const animals=getAnimals(), eggs=gameState.incubationTasks, records=gameState.pedigreeRecords;
         room=mountBreedingRoom(root,{animals,eggs,pedigreeRecords:records,preselected,now:()=>gameNow(gameState),
             makeIds:()=>({}), getCapacity:()=>breeding.capacity().incubation,
-            executeBreeding:({mother,father})=>breeding.breed(mother.id,father.id),
+            getInventory:()=>gameState.inventory,executeBreeding:({mother,father,item})=>breeding.breed(mother.id,father.id,item),
             onChange:r=>{syncRoom();showNotice(r.message);updateHeader();}
         });
         room.sync=()=>{animals.splice(0,animals.length,...getAnimals());if(eggs!==gameState.incubationTasks)eggs.splice(0,eggs.length,...gameState.incubationTasks);if(records!==gameState.pedigreeRecords){for(const k of Object.keys(records))delete records[k];Object.assign(records,gameState.pedigreeRecords);}};
@@ -455,7 +455,7 @@ function renderLocation(location) {
 
         </section>
 
-        ${location==="computer"?`<section class="panel">${filterMarkup(boxFilter)}<label>自动整理 <select id="box-sort">${[["breed","犬种"],["name","名称"],["sex","性别"],["age","年龄"],["iv","个体值"]].map(([k,v])=>`<option value="${k}" ${boxSort===k?"selected":""}>${v}</option>`).join("")}</select></label><small>显示 ${animals.length}/${occupied} 只</small></section>`:""}${renderAnimalList(animals)}
+        ${location==="computer"?`<section class="panel">${filterMarkup(boxFilter,{advanced:true})}<label>自动整理 <select id="box-sort">${[["breed","犬种"],["name","名称"],["sex","性别"],["age","年龄"],["iv","个体值"]].map(([k,v])=>`<option value="${k}" ${boxSort===k?"selected":""}>${v}</option>`).join("")}</select></label><small>显示 ${animals.length}/${occupied} 只</small></section>`:""}${renderAnimalList(animals)}
 
     `;
 }
@@ -896,7 +896,7 @@ function initGame() {
         actions.append(download,retry,reset);panel.append(heading,detail,help,actions);mainContent.append(panel);
         showNotice('存档无法读取',true);
     }
-    console.log('狗狗育种模拟器 V1.0.4 初始化完成');
+    console.log('狗狗育种模拟器 V1.0.5 初始化完成');
 }
 
 initGame();

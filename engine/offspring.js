@@ -144,7 +144,7 @@ export function generateOffspringData(
     mother,
     father,
     offspringId,
-    pedigreeRecords = {}
+    pedigreeRecords = {}, inheritedCount
 ) {
 
     validateParents(
@@ -217,7 +217,7 @@ export function generateOffspringData(
 
             mother,
 
-            father
+            father, inheritedCount
 
         );
 

@@ -8,3 +8,6 @@ export const EXPLORATION_MAPS = [
 ];
 export const EXPLORATION_ITEMS={dog_biscuit:'狗狗饼干',chew_toy:'耐咬玩具',energy_snack:'能量零食'};
 export const getExplorationMap=id=>EXPLORATION_MAPS.find(m=>m.id===id);
+
+export const MAP_BREEDS={park:['chihuahua','pomeranian','yorkshire_terrier','maltese','papillon','toy_poodle'],field:['corgi','shiba_inu','beagle','border_collie','shetland_sheepdog','cocker_spaniel'],wetland:['golden_retriever','labrador_retriever','newfoundland'],forest:['german_shepherd','doberman','tibetan_mastiff','great_pyrenees','great_dane','bernese_mountain_dog'],snow:['husky','samoyed','saint_bernard']};
+export function pickMapBreed(mapId,breeds,rng=Math.random){const preferred=MAP_BREEDS[mapId]??[];const pool=breeds.flatMap(b=>Array(preferred.includes(b.id)?4:1).fill(b));return pool[Math.floor(rng()*pool.length)];}
